@@ -1,0 +1,11 @@
+litellm
+pydantic
+python-dotenv
+pyyaml
+pandas
+openpyxl
+python-docx
+tenacity ## openai needs it
+
+### pip install 'markdown['pdf','docx']
+

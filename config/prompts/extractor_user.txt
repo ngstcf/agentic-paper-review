@@ -1,0 +1,34 @@
+# Paper Content
+{paper_markdown}
+
+# Evaluation Criterion
+**Name:** {criterion_name}
+**Description:** {criterion_description}
+
+**Scoring Scale:**
+{scale_definition}
+
+# Task
+Analyze this paper against the criterion "{criterion_name}". Provide:
+
+1.  **score** (on the defined scale): Your assessment as an integer.
+2.  **score_justification** (2-3 sentences): Why this score?
+3.  **evidence** (3-5 key quotes):
+    * **quote**: Direct quote from the paper.
+    * **page_reference**: Page/section reference (e.g., "Page 5, Section 3.1"). If unknown, state "N/A".
+    * **relevance**: How this quote supports the assessment.
+4.  **strengths** (bullet points): What the paper does well for this criterion.
+5.  **weaknesses** (bullet points): What could be improved for this criterion.
+6.  **confidence** (0.0-1.0): How confident you are in this assessment (e.g., 0.85).
+
+Output as valid JSON matching this schema:
+{{
+  "score": <int>,
+  "score_justification": "<string>",
+  "evidence": [
+    {{ "quote": "<string>", "page_reference": "<string>", "relevance": "<string>" }}
+  ],
+  "strengths": ["<string>"],
+  "weaknesses": ["<string>"],
+  "confidence": <float>
+}}

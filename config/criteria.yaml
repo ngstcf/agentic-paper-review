@@ -1,0 +1,126 @@
+domain: development_economics
+
+recommendation_thresholds:
+  - threshold: 85
+    label: "Accept"
+  - threshold: 70
+    label: "Accept with Revisions"
+  - threshold: 50
+    label: "Revise and Resubmit"
+  - threshold: 0
+    label: "Reject"
+
+criteria:
+  - id: theoretical_contribution
+    name: Theoretical Contribution
+    description: "Evaluates the paper's advancement of theoretical understanding, conceptual frameworks, or formal models in the field."
+    weight: 12
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "No contribution"
+        2: "Minimal contribution"
+        3: "Moderate contribution"
+        4: "Strong contribution"
+        5: "Exceptional contribution"
+
+  - id: empirical_rigor
+    name: Empirical Rigor
+    description: "Assesses the quality of the empirical methods, data, and execution, including the appropriateness of the research design and statistical analysis."
+    weight: 18
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "Fundamentally flawed"
+        2: "Significant weaknesses"
+        3: "Adequate"
+        4: "Strong and robust"
+        5: "Exceptional / state-of-the-art"
+
+  - id: originality_novelty
+    name: Originality and Novelty
+    description: "Evaluates whether the paper addresses a new question, uses a novel dataset, or applies a new method in a creative way."
+    weight: 10
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "Highly derivative"
+        2: "Minor novelty"
+        3: "Moderately original"
+        4: "Highly original"
+        5: "Groundbreaking"
+
+  - id: statistical_robustness
+    name: Statistical Robustness
+    description: "Evaluates the quality of statistical tests, power analysis, and sensitivity/robustness checks."
+    weight: 15
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "Statistically flawed"
+        2: "Weak / Inappropriate"
+        3: "Adequate"
+        4: "Robust"
+        5: "Exceptional"
+
+  - id: policy_relevance
+    name: Policy Relevance and Impact
+    description: "Assesses the paper's potential to inform development policy, practice, or intervention design. Considers external validity and applicability to real-world contexts."
+    weight: 12
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "No policy relevance"
+        2: "Limited applicability"
+        3: "Moderate policy implications"
+        4: "Strong policy relevance"
+        5: "Transformative policy impact"
+
+  - id: identification_strategy
+    name: Identification Strategy
+    description: "Evaluates the credibility of causal identification, including the validity of instruments, quasi-experimental designs, or randomization protocols."
+    weight: 15
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "No credible identification"
+        2: "Weak identification"
+        3: "Adequate identification"
+        4: "Strong identification"
+        5: "Exemplary identification"
+
+  - id: data_quality
+    name: Data Quality and Context
+    description: "Assesses the quality, representativeness, and contextual appropriateness of the data. Considers sample size, measurement validity, and data collection methods."
+    weight: 10
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "Poor quality or inappropriate"
+        2: "Significant data limitations"
+        3: "Adequate quality"
+        4: "High quality data"
+        5: "Exceptional data quality"
+
+  - id: presentation_clarity
+    name: Presentation and Clarity
+    description: "Evaluates the writing quality, logical organization, clarity of exposition, and quality of tables/figures."
+    weight: 8
+    scale:
+      type: numeric
+      range: [1, 5]
+      labels:
+        1: "Unclear or poorly organized"
+        2: "Significant clarity issues"
+        3: "Adequately clear"
+        4: "Well-written and clear"
+        5: "Exceptionally clear and compelling"
+
+# Total weight: 100 (12+18+10+15+12+15+10+8)

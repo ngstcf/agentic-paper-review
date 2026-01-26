@@ -1,0 +1,46 @@
+# Environment and secrets
+.env
+.env.*
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Node
+node_modules/
+package-lock.json
+
+# Output and temporary files
+outputs/
+papers/
+papers_master/
+run_*/
+*.log
+temp.*
+x.md
+output.md
+
+# Documentation to exclude
+article_agentic_review.md
+*.html
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Test files
+test.py
+test2.py
+compare_reports.py
+
+# Temporary setup scripts
+setup_batch_runs.py
+fetch_arxiv_papers.py
