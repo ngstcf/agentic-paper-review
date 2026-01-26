@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--judge-provider", help="Judge provider")
     parser.add_argument("--judge-model", help="Judge model")
     parser.add_argument("--judge-temperature", type=float, help="Judge temperature")
+    parser.add_argument("--literature-grounding", action="store_true", help="Enable literature grounding enhancement")
     args = parser.parse_args()
     
     print("=" * 80)
@@ -211,14 +212,24 @@ def main():
     print("\n" + "=" * 80)
     print("🚀 Starting Review Process")
     print("=" * 80)
-    
-    # Run the review system with environment variables to ensure they're used
-    cmd = ["python", "run_review_with_dir.py", "--run-dir", args.run_dir]
-    
+
+    # Choose the appropriate script based on literature grounding flag
+    if args.literature_grounding:
+        script_name = "run_review_with_dir_literature.py"
+        print("📚 Mode: Literature-Grounded Review Enhancement")
+    else:
+        script_name = "run_review_with_dir.py"
+        print("📝 Mode: Standard Review")
+
+    # Build command with appropriate flags
+    cmd = ["python", script_name, "--run-dir", args.run_dir]
+    if args.literature_grounding:
+        cmd.append("--literature-grounding")
+
     # Set environment variables for this run
     env = os.environ.copy()
     env.update(env_vars)  # Use the updated env_vars
-    
+
     print(f"🔧 Executing: {' '.join(cmd)}")
     print(f"⏰ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("-" * 80)

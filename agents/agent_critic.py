@@ -22,11 +22,176 @@ from core.data_models import (
     NoveltyRankedExtraction,
     BaselineReference,
     FactCheckResult,
-    LiteratureContext
+    LiteratureContext,
+    DetailedAssessment
 )
 from core.config_loader import Config
 from core.llm_wrapper import call_llm
 from utilities.helpers import get_weights_table
+
+
+def _repair_schema_mismatch(
+    review_data: Dict[str, Any],
+    base_score: float,
+    extractions: List[NoveltyRankedExtraction],
+    recommendation: str,
+    rationale: str
+) -> Dict[str, Any]:
+    """
+    Repair schema mismatches when LLM doesn't return expected JSON structure.
+
+    Handles common issues like:
+    - 'summary' instead of 'executive_summary'
+    - 'strengths'/'weaknesses' as separate arrays instead of nested in 'detailed_assessment'
+    - Missing required fields
+
+    Args:
+        review_data: Raw JSON from LLM
+        base_score: Calculated base score
+        extractions: Novelty-ranked extractions
+        recommendation: Calculated recommendation
+        rationale: Recommendation rationale
+
+    Returns:
+        Repaired review data matching expected schema
+    """
+    import re
+
+    repaired = {}
+
+    # Map 'summary' or 'review_summary' to 'executive_summary'
+    if 'executive_summary' not in review_data:
+        if 'summary' in review_data:
+            repaired['executive_summary'] = review_data['summary']
+            print(f"[Critic Schema Repair] Mapped 'summary' → 'executive_summary'")
+        elif 'review_summary' in review_data:
+            repaired['executive_summary'] = review_data['review_summary']
+            print(f"[Critic Schema Repair] Mapped 'review_summary' → 'executive_summary'")
+        else:
+            repaired['executive_summary'] = f"This paper was evaluated across {len(extractions)} criteria with an overall score of {base_score:.1f}/100. {rationale}"
+            print(f"[Critic Schema Repair] Using fallback executive_summary")
+        print(f"[Critic Schema Repair] executive_summary length: {len(repaired['executive_summary'])}")
+
+    # Handle detailed_assessment - may come as 'strengths'/'weaknesses' or nested
+    if 'detailed_assessment' not in review_data or not isinstance(review_data.get('detailed_assessment'), dict):
+        strengths = []
+        concerns = []
+        minor_issues = []
+
+        # Extract from separate arrays if available
+        if 'strengths' in review_data and isinstance(review_data['strengths'], list):
+            strengths = review_data['strengths'][:4]
+            print(f"[Critic Schema Repair] Extracted {len(strengths)} strengths from 'strengths' array")
+
+        if 'weaknesses' in review_data and isinstance(review_data['weaknesses'], list):
+            weaknesses = review_data['weaknesses']
+            # Split into major concerns (first 3) and minor issues (rest)
+            concerns = weaknesses[:3]
+            minor_issues = weaknesses[3:6]
+            print(f"[Critic Schema Repair] Extracted {len(concerns)} concerns and {len(minor_issues)} from 'weaknesses' array")
+
+        # If still empty, populate from extractions
+        if not strengths:
+            for e in extractions:
+                strengths.extend(e.strengths[:1])
+            strengths = strengths[:4]
+        if not concerns:
+            for e in extractions:
+                if e.score < 70:
+                    concerns.extend(e.weaknesses[:1])
+            concerns = concerns[:3]
+
+        repaired['detailed_assessment'] = {
+            'major_strengths': strengths,
+            'major_concerns': concerns,
+            'minor_issues': minor_issues
+        }
+        print(f"[Critic Schema Repair] Created 'detailed_assessment' from separate arrays")
+
+    # Map 'recommendation' - may be full sentence, extract the decision
+    if 'recommendation' in review_data:
+        raw_rec = review_data['recommendation']
+        # Try to extract standard decision from text
+        decision_keywords = {
+            'Accept': ['accept', 'accepted', 'publish'],
+            'Accept with Revisions': ['accept with revisions', 'accept with minor revisions', 'minor revisions'],
+            'Revise and Resubmit': ['revise and resubmit', 'resubmit', 'major revisions'],
+            'Reject': ['reject', 'rejected', 'not suitable']
+        }
+
+        found_decision = None
+        for decision, keywords in decision_keywords.items():
+            if any(kw in raw_rec.lower() for kw in keywords):
+                found_decision = decision
+                break
+
+        if found_decision:
+            repaired['recommendation'] = found_decision
+            print(f"[Critic Schema Repair] Extracted decision '{found_decision}' from recommendation text")
+        else:
+            # Use calculated recommendation
+            repaired['recommendation'] = recommendation
+            repaired['recommendation_rationale'] = raw_rec  # Use full text as rationale
+            print(f"[Critic Schema Repair] Using calculated recommendation, stored LLM text as rationale")
+    else:
+        repaired['recommendation'] = recommendation
+
+    # recommendation_rationale - may be separate or derived
+    if 'recommendation_rationale' not in repaired and 'recommendation_rationale' not in review_data:
+        repaired['recommendation_rationale'] = rationale
+        print(f"[Critic Schema Repair] Added recommendation_rationale from calculated rationale")
+
+    # revision_suggestions - extract from 'verification_notes' or derive from weaknesses
+    if 'revision_suggestions' not in review_data or not isinstance(review_data.get('revision_suggestions'), list):
+        suggestions = []
+
+        if 'verification_notes' in review_data:
+            # Parse suggestions from verification notes
+            notes = review_data['verification_notes']
+            if 'contingent on:' in notes.lower():
+                parts = re.split(r'\d+\)', notes)
+                for part in parts[1:4]:  # First 3 suggestions
+                    part = part.strip()
+                    if part and len(part) > 10:
+                        suggestions.append(part[:100])  # Truncate if too long
+
+        if not suggestions:
+            # Derive from low-scoring criteria
+            for e in extractions:
+                if e.score < 70 and e.weaknesses:
+                    suggestions.append(f"Improve {e.criterion_id}: {e.weaknesses[0][:80]}")
+                if len(suggestions) >= 5:
+                    break
+
+        repaired['revision_suggestions'] = suggestions[:5]
+        print(f"[Critic Schema Repair] Generated {len(suggestions)} revision suggestions")
+
+    # decision_confidence - derive from extraction confidence
+    if 'decision_confidence' not in review_data or not isinstance(review_data.get('decision_confidence'), (int, float)):
+        avg_confidence = sum(e.confidence for e in extractions) / len(extractions) if extractions else 0.7
+        repaired['decision_confidence'] = avg_confidence
+        print(f"[Critic Schema Repair] Set decision_confidence to {avg_confidence:.2f}")
+
+    # criterion_narrative - build from extractions if not provided
+    if 'criterion_narrative' not in review_data or not isinstance(review_data.get('criterion_narrative'), dict):
+        # Build criterion_narrative from extractions
+        criterion_narrative = {}
+        for e in extractions:
+            narrative = f"**Score: {e.score}/100**\n\n{e.score_justification}\n\n"
+            if e.strengths:
+                narrative += "**Strengths:**\n" + "\n".join(f"- {s}" for s in e.strengths[:3]) + "\n\n"
+            if e.weaknesses:
+                narrative += "**Weaknesses:**\n" + "\n".join(f"- {w}" for w in e.weaknesses[:3]) + "\n\n"
+            criterion_narrative[e.criterion_id] = narrative
+        repaired['criterion_narrative'] = criterion_narrative
+        print(f"[Critic Schema Repair] Built criterion_narrative from {len(extractions)} extractions")
+
+    # Copy over any fields that are already correct
+    for key, value in review_data.items():
+        if key not in repaired:
+            repaired[key] = value
+
+    return repaired
 
 
 def _calculate_novelty_adjusted_score(
@@ -395,6 +560,12 @@ When writing your review, consider how the paper's claims relate to this literat
     if literature_section:
         prompt += literature_section
 
+    # Prepare system prompt with JSON mode requirement for OpenAI
+    actual_system_prompt = system_prompt
+    if llm_config['synthesizer_provider'].lower() in ['openai', 'custom_openai']:
+        # OpenAI requires "json" in messages when using JSON mode
+        actual_system_prompt = "Respond ONLY with valid JSON. Your output must be JSON-formatted.\n\n" + system_prompt
+
     # Call LLM with JSON parsing retry
     max_json_retries = 3
     review_data = None
@@ -403,7 +574,7 @@ When writing your review, consider how the paper's claims relate to this literat
     for json_attempt in range(max_json_retries):
         response = call_llm(
             prompt=prompt,
-            system_prompt=system_prompt,
+            system_prompt=actual_system_prompt,
             provider=llm_config['synthesizer_provider'],
             model=llm_config['synthesizer_model'],
             temperature=llm_config['temperature'],
@@ -470,7 +641,20 @@ When writing your review, consider how the paper's claims relate to this literat
             break  # Success - exit retry loop
         except json.JSONDecodeError as e:
             print(f"[Critic Warning] JSON parsing failed on attempt {json_attempt + 1}: {e}")
-            print(f"[Critic] JSON preview (first 300 chars):\n{json_text[:300]}")
+            print(f"[Critic] JSON preview (first 500 chars):\n{json_text[:500]}")
+            print(f"[Critic] JSON preview (last 300 chars):\n{json_text[-300:]}")
+
+            # Log the full JSON for debugging
+            import tempfile
+            debug_file = tempfile.gettempdir() + "/critic_json_debug.txt"
+            with open(debug_file, 'w') as f:
+                f.write(f"=== LLM Response for {paper.filename} ===\n\n")
+                f.write(f"Raw content length: {len(raw_content)}\n\n")
+                f.write(f"Extracted JSON length: {len(json_text)}\n\n")
+                f.write(f"JSON parsing error: {e}\n\n")
+                f.write(f"=== Raw Content ===\n\n{raw_content}\n\n")
+                f.write(f"=== Extracted JSON ===\n\n{json_text}\n\n")
+            print(f"[Critic] Full response saved to: {debug_file}")
 
             if json_attempt < max_json_retries - 1:
                 print(f"[Critic] Retrying...")
@@ -496,12 +680,30 @@ When writing your review, consider how the paper's claims relate to this literat
         print(f"[Critic Error] Unexpected: review_data is None after successful parsing")
         return None
 
+    # Debug: Log what keys the LLM returned
+    print(f"[Critic Debug] Keys in LLM response: {list(review_data.keys())}")
+
+    # Repair schema mismatches - LLMs may not return exact schema
+    print(f"[Critic] Checking for schema mismatches...")
+    review_data = _repair_schema_mismatch(
+        review_data=review_data,
+        base_score=base_score,
+        extractions=extractions,
+        recommendation=recommendation,
+        rationale=rationale
+    )
+
     # Calculate costs
     total_extraction_cost = sum(e.cost for e in extractions)
     total_cost = total_extraction_cost + response.get('cost', 0.0)
 
     if 'criterion_narrative' not in review_data or not isinstance(review_data['criterion_narrative'], dict):
-        print(f"[Critic Warning] 'criterion_narrative' not found or not a dict. Setting to empty.")
+        print(f"[Critic Warning] 'criterion_narrative' not found or not a dict.")
+        if 'criterion_narrative' in review_data:
+            print(f"[Critic Debug] criterion_narrative type: {type(review_data['criterion_narrative'])}")
+            print(f"[Critic Debug] criterion_narrative value: {review_data['criterion_narrative']}")
+        else:
+            print(f"[Critic Debug] Available keys in review_data: {list(review_data.keys())}")
         review_data['criterion_narrative'] = {}
 
     extractor_model_name = extractions[0].model_used if extractions else "unknown_extractor"
@@ -529,6 +731,9 @@ When writing your review, consider how the paper's claims relate to this literat
         return review
     except ValidationError as e:
         print(f"[Critic Error] Pydantic validation failed for {paper.filename}: {e}")
+        print(f"[Critic Debug] Fields returned by LLM: {list(review_data.keys())}")
+        print(f"[Critic Debug] Full LLM response:")
+        print(json.dumps(review_data, indent=2))
         print(f"[Critic] Using fallback review due to validation error")
         return _create_fallback_review(
             paper=paper,

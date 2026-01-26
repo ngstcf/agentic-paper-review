@@ -61,7 +61,8 @@ def main():
             continue
             
         # 6. Save Individual Output
-        save_review_markdown(review, paper, config)
+        output_path = f"outputs/{paper.filename}_review.md"
+        save_review_markdown(review, output_path, paper, config)
         
         final_reviews.append(review)
         total_batch_cost += review.total_cost
@@ -73,7 +74,7 @@ def main():
     # 7. Save Consolidated Report
     if final_reviews:
         print("\n--- Batch Complete ---")
-        save_consolidated_csv(final_reviews)
+        save_consolidated_csv(final_reviews, "outputs/consolidated_reviews.csv")
     
     end_time = time.time()
     print(f"\nTotal processing time: {end_time - start_time:.2f} seconds")

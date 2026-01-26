@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from typing import List, Optional
+from typing import List, Optional, Any, Union
 from datetime import datetime
 from core.data_models import Review, Paper, GroundedReview
 from core.config_loader import Config
@@ -137,23 +137,61 @@ def save_consolidated_csv(reviews: List[Review], output_dir="outputs/reports"):
 
 def save_review_markdown(
     review: Review,
-    output_path: str,
+    arg2: Any = None,
     paper: Optional[Paper] = None,
     config: Optional[Config] = None,
-    include_literature_context: bool = False
+    output_path: Optional[str] = None,
+    include_literature_context: bool = False,
+    _backward_compat_mode: bool = False
 ):
     """
     Save a review as Markdown.
 
     This function handles both standard reviews and grounded reviews.
+    Supports both legacy and modern calling conventions for backward compatibility.
 
     Args:
         review: The review (Review or GroundedReview)
-        output_path: Path to save the markdown file
-        paper: Optional paper object (for backward compatibility)
-        config: Optional config (for backward compatibility)
+        arg2: Second argument (could be output_path (modern) or paper (legacy))
+        paper: Optional paper object
+        config: Optional config
+        output_path: Optional output path (keyword-only for modern calls)
         include_literature_context: Whether to include literature context sections
+        _backward_compat_mode: Internal flag for backward compatibility
+
+    Legacy calling convention: save_review_markdown(review, paper, config, output_path)
+    Modern calling convention: save_review_markdown(review, output_path, paper=paper, config=config)
     """
+    # Handle backward compatibility - detect calling convention
+    if output_path is None and arg2 is not None:
+        # Legacy call: save_review_markdown(review, paper, config, output_dir)
+        # arg2 is actually paper, paper is config, config is output_dir
+        actual_paper = arg2 if isinstance(arg2, Paper) else None
+        actual_config = paper if isinstance(paper, Config) else None
+        actual_output_dir = config if isinstance(config, str) else None
+
+        if actual_output_dir and actual_paper and actual_config:
+            # Legacy call: construct full file path from directory using established naming convention
+            paper_base_name = os.path.splitext(actual_paper.filename)[0]
+            timestamp = review.synthesis_timestamp.strftime('%Y%m%d_%H%M%S')
+            ext_model_name = sanitize_model_name(review.extractor_model_used)
+            syn_model_name = sanitize_model_name(review.synthesizer_model_used)
+            filename = f"{paper_base_name}_{ext_model_name}_{syn_model_name}_{timestamp}.md"
+            output_path = os.path.join(actual_output_dir, filename)
+            paper = actual_paper
+            config = actual_config
+        elif isinstance(arg2, str):
+            # Modern call: save_review_markdown(review, output_path)
+            output_path = arg2
+        else:
+            raise ValueError(f"Cannot determine calling convention. arg2 type: {type(arg2)}")
+    elif arg2 is not None and isinstance(arg2, str):
+        # Modern call with positional output_path
+        output_path = arg2
+
+    if output_path is None:
+        raise ValueError("output_path must be provided")
+
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
     with open(output_path, 'w', encoding='utf-8') as f:
@@ -238,17 +276,29 @@ def save_review_markdown(
 
 def save_consolidated_csv(
     reviews: List[Review],
-    output_path: str,
+    arg2: Any,
     include_literature_metrics: bool = False
 ):
     """
     Save a consolidated CSV of all reviews.
 
+    Supports both legacy and modern calling conventions for backward compatibility.
+
     Args:
         reviews: List of reviews (Review or GroundedReview)
-        output_path: Path to save the CSV
+        arg2: output_path (modern) or output_dir (legacy)
         include_literature_metrics: Whether to include literature grounding columns
+
+    Legacy calling convention: save_consolidated_csv(reviews, output_dir)
+    Modern calling convention: save_consolidated_csv(reviews, output_path)
     """
+    # Handle backward compatibility - detect if arg2 is a directory or file path
+    output_path = arg2
+    if isinstance(arg2, str) and os.path.isdir(arg2):
+        # Legacy call: arg2 is a directory, construct file path
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = os.path.join(arg2, f"consolidated_reviews_{timestamp}.csv")
+
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
     report_data = []

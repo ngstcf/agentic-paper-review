@@ -22,13 +22,75 @@ def estimate_tokens(text: str) -> int:
 
 def extract_metadata(markdown_text: str) -> PaperMetadata:
     """
-    Rudimentary metadata extraction.
-    This should be replaced by a more robust LLM-based call.
+    Extract metadata from markdown text including title, abstract, authors.
     """
-    title = markdown_text.split('\n')[0].lstrip('# ').strip()
+    lines = markdown_text.split('\n')
+
+    # Extract title (first non-empty line, removing markdown #)
+    title = "No Title Found"
+    for line in lines:
+        stripped = line.strip()
+        if stripped:
+            # Remove leading # symbols
+            title = stripped.lstrip('#').strip()
+            break
+
+    # Extract abstract
+    # Look for abstract in the first part of the document
+    abstract = None
+    abstract_started = False
+    abstract_lines = []
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Look for "Abstract" heading or similar patterns
+        if not abstract_started:
+            if (stripped.lower().startswith('abstract') or
+                stripped.lower() in ['summary', 'introduction'] or
+                '## abstract' in stripped.lower() or
+                '# abstract' in stripped.lower()):
+                abstract_started = True
+                # Skip the heading line itself, start from next
+                continue
+
+        # If we're in the abstract section
+        elif abstract_started:
+            # Stop at next major heading or end of reasonable abstract length
+            if (stripped.startswith('#') and not stripped.startswith('###')) or \
+               len(abstract_lines) > 20:  # Reasonable abstract length
+                break
+
+            # Skip empty lines at start
+            if not abstract_lines and not stripped:
+                continue
+
+            abstract_lines.append(stripped)
+
+    # If we found abstract content, join it
+    if abstract_lines:
+        abstract = '\n'.join(abstract_lines)
+    else:
+        # Try to find abstract as the first paragraph after title
+        in_content = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not in_content and stripped:
+                continue
+            in_content = True
+            # Skip title line
+            if i == 0 or stripped.startswith('#'):
+                continue
+            # First paragraph could be abstract
+            if stripped and len(stripped) > 50:  # Minimum reasonable length
+                abstract = stripped
+                break
+            if abstract_lines:
+                break
+
     return PaperMetadata(
         title=title if title else "No Title Found",
-        abstract="Placeholder: Abstract extraction not fully implemented."
+        abstract=abstract if abstract else "No abstract available."
     )
 
 def get_file_hash(file_path: str) -> str:
