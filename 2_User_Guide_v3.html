@@ -497,18 +497,74 @@
             <div class="note">
                 <strong>NEW: Literature-Grounded Mode</strong>
                 <p>
-                    When literature grounding is enabled, the system adds three specialized agents for literature analysis:
+                    When literature grounding is enabled (via <code>--literature-grounding</code> flag), the system adds specialized agents for literature analysis.
                 </p>
-                <ul>
-                    <li><strong>The Librarian</strong> establishes the state of the art by finding and analyzing key related papers via Semantic Scholar API.</li>
-                    <li><strong>The Reader</strong> assesses novelty by comparing the target paper against the baseline literature (replaces Specialist in literature mode).</li>
-                    <li><strong>The Fact-Checker</strong> verifies bold claims to prevent overstated novelty (triggered by suspicious assertions).</li>
-                    <li><strong>The Critic</strong> provides research context and novelty-adjusted scoring (replaces Editor in literature mode).</li>
-                </ul>
                 <p>
                     See <a href="#s4b">Section 4b: Literature-Grounded Reviews</a> for detailed information.
                 </p>
             </div>
+
+            <h3>Complete Pipeline Flow (Literature-Enhanced)</h3>
+            <p>The <code>run_review_with_dir_literature.py</code> script supports a complete pipeline with optional literature stages:</p>
+
+            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0;">
+                <div style="font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 0.85em; line-height: 1.8;">
+                    <div style="color: #0056b3; font-weight: bold; margin-bottom: 10px;">run_review_with_dir_literature.py</div>
+
+                    <div style="margin-left: 15px;">
+                        <div style="margin: 8px 0;">
+                            <span style="color: #28a745;">✓</span> <strong>1. Ingestion</strong>
+                        </div>
+
+                        <div style="margin: 8px 0;">
+                            <span style="color: #007bff;">⚡</span> <strong>2. Literature Grounding</strong> <span style="color: #6c757d;">(if --literature-grounding enabled)</span>
+                            <div style="margin-left: 25px; margin-top: 5px;">
+                                <div>├─ <strong>Librarian</strong> → create_baseline_reference()</div>
+                                <div style="margin-left: 20px;">└─ Searches Semantic Scholar, extracts top 5 papers</div>
+                                <div>├─ <strong>Reader (during extraction)</strong> → adds novelty rankings</div>
+                                <div style="margin-left: 20px;">└─ Compares paper against baseline literature</div>
+                                <div>└─ <strong>Fact-Checker (after extraction)</strong> → run_fact_checks()</div>
+                                <div style="margin-left: 20px;">└─ Verifies suspicious claims (e.g., "first study")</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 8px 0;">
+                            <span style="color: #dc3545;">◆</span> <strong>3. Agent 1: Extractor</strong> <span style="color: #6c757d;">(standard or literature-enhanced)</span>
+                            <div style="margin-left: 25px; margin-top: 5px;">
+                                <div>└─ Reads paper N times (once per criterion)</div>
+                                <div style="margin-left: 20px;">├─ Standard: process_paper_extractions()</div>
+                                <div style="margin-left: 20px;">└─ Literature: process_paper_extractions_literature()</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 8px 0;">
+                            <span style="color: #fd7e14;">●</span> <strong>4. Agent 2: Synthesizer</strong> <span style="color: #6c757d;">(standard or literature-enhanced)</span>
+                            <div style="margin-left: 25px; margin-top: 5px;">
+                                <div>├─ Standard: synthesize_review() → Review</div>
+                                <div>└─ Literature: synthesize_grounded_review() → GroundedReview</div>
+                                <div style="margin-left: 20px;">├─ Research Trajectory analysis</div>
+                                <div style="margin-left: 20px;">├─ Novelty-adjusted scoring</div>
+                                <div style="margin-left: 20px;">└─ Fact-check integration</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 8px 0;">
+                            <span style="color: #6f42c1;">★</span> <strong>5. Output</strong> <span style="color: #6c757d;">(with literature context if enabled)</span>
+                            <div style="margin-left: 25px; margin-top: 5px;">
+                                <div>├─ Individual reviews: <code>*_review.md</code></div>
+                                <div>├─ Consolidated CSV: <code>report_consolidated_*.csv</code></div>
+                                <div>└─ Literature sections (if enabled):</div>
+                                <div style="margin-left: 20px;">├─ Research Trajectory</div>
+                                <div style="margin-left: 20px;">├─ Novelty Rankings (1-5)</div>
+                                <div style="margin-left: 20px;">├─ Fact-Check Results</div>
+                                <div style="margin-left: 20px;">└─ Novelty-Adjusted Score</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <p><strong>Key insight:</strong> Literature stages (2) are completely optional. When disabled, the pipeline runs as a standard 3-stage review (Ingestion → Extractor → Synthesizer → Output).</p>
         </section>
         
         <section id="s3" class="section">
