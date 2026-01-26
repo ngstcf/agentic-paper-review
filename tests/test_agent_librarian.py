@@ -7,7 +7,7 @@ Tests baseline reference creation and keyword extraction.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from core.data_models import Paper, BaselineReference, RelatedPaperMetadata
+from core.data_models import Paper, PaperMetadata, BaselineReference, RelatedPaperMetadata
 from core.config_loader import Config
 from agents.agent_librarian import (
     _extract_search_keywords,
@@ -30,7 +30,7 @@ def mock_paper():
         original_path="/papers/test_paper.pdf",
         content_markdown="# Test Paper\n\nThis is a test paper about machine learning.",
         token_count=500,
-        metadata=Mock(
+        metadata=PaperMetadata(
             title="A Novel Approach to Machine Learning",
             authors=["Smith, J.", "Doe, A."],
             abstract="This paper presents a novel machine learning approach for text classification using neural networks.",

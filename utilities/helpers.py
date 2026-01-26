@@ -3,6 +3,7 @@ import re
 import os
 import hashlib
 import json
+import yaml
 from typing import Dict, Any
 from core.config_loader import Config
 
@@ -63,6 +64,23 @@ def get_judge_config_hash() -> str:
         "model": os.environ.get("JUDGE_MODEL", "gpt-4o"),
         "temperature": float(os.environ.get("JUDGE_TEMPERATURE", 0.1))
     }
-    
+
     config_str = json.dumps(judge_config, sort_keys=True)
     return hashlib.md5(config_str.encode()).hexdigest()
+
+def load_yaml_config(file_path: str) -> Dict[str, Any]:
+    """
+    Load a YAML configuration file.
+
+    Args:
+        file_path: Path to the YAML file
+
+    Returns:
+        Dictionary containing the parsed YAML content
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        yaml.YAMLError: If the file contains invalid YAML
+    """
+    with open(file_path, 'r') as f:
+        return yaml.safe_load(f)

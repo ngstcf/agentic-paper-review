@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from core.data_models import (
     Paper,
+    PaperMetadata,
     NoveltyRankedExtraction,
     BaselineReference,
     RelatedPaperMetadata
@@ -34,7 +35,7 @@ def mock_paper():
         original_path="/papers/test_paper.pdf",
         content_markdown="# Introduction\n\nThis paper introduces a new method for text classification.",
         token_count=1000,
-        metadata=Mock(
+        metadata=PaperMetadata(
             title="Novel Text Classification Method",
             authors=["Smith, J."],
             abstract="A novel approach to text classification."

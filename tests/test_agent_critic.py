@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 from core.data_models import (
     Paper,
+    PaperMetadata,
     GroundedReview,
     Review,
     WeightedBreakdown,
@@ -39,7 +40,7 @@ def mock_paper():
         original_path="/papers/test_paper.pdf",
         content_markdown="# Test Paper\n\nContent here.",
         token_count=1000,
-        metadata=Mock(
+        metadata=PaperMetadata(
             title="Novel Machine Learning Approach",
             authors=["Smith, J."],
             abstract="A novel approach to ML."
