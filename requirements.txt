@@ -9,5 +9,10 @@ tenacity ## openai needs it
 requests>=2.31.0  # HTTP client for Semantic Scholar API
 aiohttp>=3.9.0  # Async HTTP (optional, for performance)
 
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+
 ### pip install 'markdown['pdf','docx']
 
