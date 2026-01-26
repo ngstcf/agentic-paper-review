@@ -294,7 +294,8 @@ def _create_fallback_review(
         total_cost=total_cost,
         literature_context=literature_context or LiteratureContext(),
         research_trajectory_section=research_trajectory,
-        novelty_adjusted_score=novelty_adjusted_score
+        novelty_adjusted_score=novelty_adjusted_score,
+        llm_fallback_used=True  # Mark as fallback review
     )
 
     print(f"[Critic] Created fallback review for {paper.filename}")

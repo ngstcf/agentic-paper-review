@@ -135,3 +135,4 @@ class GroundedReview(Review):
     literature_context: LiteratureContext = Field(default_factory=LiteratureContext)
     research_trajectory_section: str = ""
     novelty_adjusted_score: Optional[float] = None
+    llm_fallback_used: bool = False  # True if fallback review was used due to JSON parsing failure

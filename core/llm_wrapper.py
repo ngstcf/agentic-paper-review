@@ -144,16 +144,24 @@ def call_llm(
     # 1. Start with standard params
     # Use higher max_tokens for newer models with larger context windows
     # deepseek-reasoner: up to 128k output tokens
-    # gemini: up to 8k output tokens
-    # gpt-4: up to 4k/16k output tokens
+    # gemini-2.5: up to 1M output tokens
+    # gpt-4o: 16k output tokens
+    # gpt-4-turbo: 4k output tokens
     provider_lower = provider.strip().lower()
     model_lower = model.strip().lower()
 
     # Set token limits based on model capabilities
-    if "reasoner" in model_lower or "gpt-4" in model_lower or "gemini-2.5" in model_lower:
-        max_tokens_limit = 32768  # Higher limit for reasoning models
+    # Must check more specific models first (gpt-4o before gpt-4)
+    if "gpt-4o" in model_lower:
+        max_tokens_limit = 16384  # gpt-4o and gpt-4o-mini support 16k
+    elif "gpt-4" in model_lower:
+        max_tokens_limit = 4096  # gpt-4 and gpt-4-turbo support 4k
+    elif "reasoner" in model_lower:
+        max_tokens_limit = 32768  # deepseek-reasoner supports up to 128k
+    elif "gemini-2.5" in model_lower:
+        max_tokens_limit = 32768  # gemini 2.5 supports high output
     else:
-        max_tokens_limit = 16384  # Standard limit for other models
+        max_tokens_limit = 8192  # Standard limit for other models
 
     params = {
         "num_retries": max_retries,

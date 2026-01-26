@@ -229,6 +229,10 @@ def save_review_markdown(
         f.write(f"- **Synthesizer Model:** {review.synthesizer_model_used}\n")
         f.write(f"- **Total API Cost:** ${review.total_cost:.4f}\n")
 
+        # Fallback notice if applicable
+        if include_literature_context and isinstance(review, GroundedReview) and review.llm_fallback_used:
+            f.write(f"\n---\n\n**⚠️ Note:** This review was generated using fallback mode due to LLM output formatting issues. The scores and assessment are based on the extracted evidence data rather than a full LLM-generated narrative.\n")
+
     print(f"[Output] Saved review to {output_path}")
 
 
