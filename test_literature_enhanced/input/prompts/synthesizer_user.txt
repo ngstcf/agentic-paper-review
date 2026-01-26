@@ -1,0 +1,34 @@
+# Paper Information
+**Title:** {paper_title}
+**Abstract:** {paper_abstract}
+
+# Extracted Evidence (from Agent 1)
+{json_dump_of_extractions}
+
+# Review Configuration
+**Criteria Weights:**
+{weights_table}
+
+**Overall Weighted Score:** {calculated_score}/100
+**Preliminary Recommendation:** {calculated_recommendation}
+
+# Task
+Synthesize these criterion-level assessments into a comprehensive review.
+
+Output as valid JSON matching this schema:
+{{
+  "executive_summary": "<string: 3-4 sentence summary of the paper, its strengths, and weaknesses>",
+  "detailed_assessment": {{
+    "major_strengths": ["<string: 2-4 bullet points highlighting exceptional aspects>"],
+    "major_concerns": ["<string: 0-3 bullet points of critical issues>"],
+    "minor_issues": ["<string: 2-4 bullet points of areas for improvement>"]
+  }},
+  "criterion_narrative": {{
+    "<criterion_id_1>": "<string: 2-3 sentence narrative for this criterion>",
+    "<criterion_id_2>": "<string: 2-3 sentence narrative for this criterion>"
+  }},
+  "recommendation": "<string: 'Accept', 'Accept with Revisions', 'Revise and Resubmit', or 'Reject'>",
+  "recommendation_rationale": "<string: 2-3 sentences justifying the decision>",
+  "revision_suggestions": ["<string: 3-5 concrete, actionable suggestions for authors>"],
+  "decision_confidence": <float: 0.0-1.0>
+}}

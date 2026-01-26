@@ -1,0 +1,101 @@
+{
+  "config_hash": "679cb7d7d15b17fc4d9f4d5972e45b4a",
+  "papers": {
+    "2601.12369v1.pdf": {
+      "review": {
+        "paper_id": "4961ff3b-5e0b-4a49-ab94-3874905261df",
+        "paper_title": "Fudan NLP Lab 2026-1-21",
+        "paper_filename": "2601.12369v1.pdf",
+        "overall_score": 57.2,
+        "weighted_breakdown": {
+          "data_quality": {
+            "score": 4,
+            "weight": 10,
+            "weighted_score": 8.0
+          },
+          "empirical_rigor": {
+            "score": 4,
+            "weight": 18,
+            "weighted_score": 14.4
+          },
+          "identification_strategy": {
+            "score": 0,
+            "weight": 15,
+            "weighted_score": 0.0
+          },
+          "originality_novelty": {
+            "score": 4,
+            "weight": 10,
+            "weighted_score": 8.0
+          },
+          "policy_relevance": {
+            "score": 2,
+            "weight": 12,
+            "weighted_score": 4.800000000000001
+          },
+          "presentation_clarity": {
+            "score": 4,
+            "weight": 8,
+            "weighted_score": 6.4
+          },
+          "statistical_robustness": {
+            "score": 2,
+            "weight": 15,
+            "weighted_score": 6.0
+          },
+          "theoretical_contribution": {
+            "score": 4,
+            "weight": 12,
+            "weighted_score": 9.600000000000001
+          }
+        },
+        "recommendation": "Revise and Resubmit",
+        "recommendation_rationale": "The paper presents a valuable and innovative benchmark but requires substantial revisions to address major methodological shortcomings, particularly the absence of causal identification strategies and insufficient statistical robustness. These issues must be addressed before the work can be considered for acceptance.",
+        "executive_summary": "This paper introduces TaxoBench, a novel benchmark designed to evaluate whether Deep Research Agents can write academic surveys comparable to human experts. The paper's strengths include a significant theoretical contribution through its innovative evaluation framework, high-quality dataset construction with expert annotations, and clear presentation of findings. However, it suffers from major weaknesses including the complete absence of causal identification strategies, insufficient statistical robustness checks, and limited policy relevance, which collectively undermine its empirical claims and broader impact.",
+        "detailed_assessment": {
+          "major_strengths": [
+            "Introduces TaxoBench, a novel and theoretically significant benchmark that fills a critical gap in evaluating AI capabilities for expert-like survey writing and knowledge organization.",
+            "Demonstrates strong empirical rigor through a well-defined methodology, comprehensive dataset of 72 expert-authored surveys across 8 domains, and expert-annotated ground truth.",
+            "Exhibits high data quality and contextual appropriateness with careful manual taxonomy extraction and annotations by domain experts holding PhDs."
+          ],
+          "major_concerns": [
+            "Completely lacks any causal identification strategies (e.g., experimental designs, instrumental variables), making it impossible to establish causal relationships between model capabilities and outcomes.",
+            "Statistical robustness is insufficient, with no power analysis, sensitivity checks, or comprehensive statistical validation to support the empirical findings."
+          ],
+          "minor_issues": [
+            "Could benefit from expanding the dataset to include a wider variety of research domains to enhance generalizability.",
+            "Should provide more detailed comparisons with existing benchmarks to better highlight TaxoBench's unique advantages.",
+            "Could elaborate further on the broader implications of findings for AI development and cognitive science.",
+            "Some sections could be more concise with clearer transitions between concepts."
+          ]
+        },
+        "criterion_narrative": {
+          "theoretical_contribution": "The paper makes a significant theoretical contribution by introducing TaxoBench, which provides a novel framework for assessing knowledge organization in AI systems. It addresses a critical gap in existing evaluation methods by focusing on the cognitive processes underlying expert survey writing rather than surface-level metrics.",
+          "empirical_rigor": "The study demonstrates strong empirical rigor through the careful construction of the TaxoBench benchmark, clear methodology for data collection and annotation, and appropriate statistical analyses linking retrieval to organizational quality. However, validation against existing benchmarks could strengthen these claims further.",
+          "originality_novelty": "The work is highly original, introducing the first benchmark specifically designed to evaluate AI systems' ability to replicate expert survey writing processes. The creative use of expert-authored taxonomies as ground truth represents a significant advancement over existing evaluation approaches.",
+          "statistical_robustness": "While the paper employs established statistical metrics and reports correlations, it lacks important robustness checks such as power analysis, sensitivity tests, and comprehensive statistical validation. The statistical foundation would benefit from more rigorous methodological support.",
+          "policy_relevance": "The benchmark has potential to inform the development of automated survey generation tools, but the paper does not draw direct implications for policy or practice. The relevance to real-world applications remains underdeveloped and could be strengthened with clearer translational pathways.",
+          "identification_strategy": "The paper does not employ any causal identification strategies, focusing instead on benchmarking and evaluation without establishing causal relationships. This represents a fundamental limitation in the research design that prevents stronger causal claims.",
+          "data_quality": "The dataset is of exceptional quality, featuring 72 expert surveys, 3,815 categorized citations, and annotations by domain experts. The manual extraction process ensures careful data collection, though expanding domain coverage could enhance generalizability.",
+          "presentation_clarity": "The paper is generally well-structured and clearly written, with effective use of figures and tables to illustrate concepts. Some sections could benefit from greater conciseness and smoother transitions between ideas."
+        },
+        "revision_suggestions": [
+          "Develop and incorporate a causal identification strategy, such as an experimental design or quasi-experimental approach, to establish stronger causal claims about model capabilities.",
+          "Conduct and report power analysis, sensitivity checks, and more comprehensive statistical validation to strengthen the robustness of empirical findings.",
+          "Expand the discussion of policy implications, providing concrete examples of how TaxoBench could inform the development of automated research tools in academic or industry settings.",
+          "Include a more detailed comparison with existing benchmarks to clearly articulate TaxoBench's unique contributions and advantages.",
+          "Consider expanding the dataset to include additional research domains or methodologies to enhance the benchmark's generalizability across different fields."
+        ],
+        "decision_confidence": 0.85,
+        "flags": [],
+        "synthesis_timestamp": "2026-01-26T16:53:25.925085",
+        "extractor_model_used": "openai/gpt-4o-mini",
+        "synthesizer_model_used": "deepseek/deepseek-reasoner",
+        "total_cost": 0.016640616
+      },
+      "cost": 0.016640616,
+      "timestamp": "2026-01-26T16:53:25.925085"
+    }
+  },
+  "last_updated": "2026-01-27T01:53:25.927023"
+}

@@ -1,0 +1,248 @@
+# Literature Grounding Configuration
+# Configuration for literature search and analysis
+
+# ============================================================================
+# MASTER ENABLE/DISABLE
+# ============================================================================
+# Enable or disable literature grounding for all reviews
+# When disabled, the system runs in standard mode without literature search
+enabled: true
+
+# Allow individual runs to override this setting via environment variable
+# Set LITERATURE_GROUNDING_ENABLED=false to disable for a specific run
+allow_env_override: true
+
+
+# Semantic Scholar API Settings
+semantic_scholar:
+  # API endpoint (uses official public API by default)
+  base_url: "https://api.semanticscholar.org/graph/v1"
+
+  # API key - get from https://www.semanticscholar.org/product/api#api-key
+  # Leave empty to use free tier (100 req/min for general, 5 req/min for search)
+  api_key: null  # Set via SEMANTIC_SCHOLAR_API_KEY environment variable
+
+  # Request settings
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
+
+  # Rate limits (free tier defaults)
+  max_papers_per_search: 100
+  requests_per_minute: 100
+  search_requests_per_minute: 5
+
+
+# ============================================================================
+# STAGE 1: LIBRARIAN AGENT SETTINGS
+# ============================================================================
+librarian:
+  # Number of baseline papers to retrieve
+  baseline_papers_count: 5
+
+  # Minimum citation count for baseline papers
+  citation_count_min: 10
+
+  # How many years back to search (relative to current year)
+  recency_years: 5
+
+  # Whether to extract key findings from baseline papers (requires LLM)
+  extract_key_findings: true
+
+  # Fields to include in baseline reference
+  include_fields:
+    - title
+    - authors
+    - year
+    - abstract
+    - citationCount
+    - venue
+    - openAccessPdf
+
+
+# ============================================================================
+# STAGE 2: READER (EXTRACTOR) SETTINGS
+# ============================================================================
+reader:
+  # Novelty ranking scale (1-5)
+  novelty_scale:
+    1: "No novelty - completely replicates prior work"
+    2: "Marginal novelty - minor extension of prior work"
+    3: "Moderate novelty - builds on prior work with some new insights"
+    4: "High novelty - significant advance over prior work"
+    5: "Exceptional novelty - groundbreaking, paradigm-shifting work"
+
+  # How strongly to weight novelty in final score
+  novelty_weight_multiplier: 1.0
+
+  # Whether to flag contradictions with baseline
+  flag_contradictions: true
+
+  # Whether to identify gaps in prior work
+  identify_gaps: true
+
+
+# ============================================================================
+# STAGE 3: FACT-CHECKER SETTINGS
+# ============================================================================
+fact_checker:
+  # Maximum number of verification searches per review section
+  max_verifications_per_section: 3
+
+  # Maximum verifications per entire review
+  max_verifications_total: 10
+
+  # Conditions that trigger verification
+  triggers:
+    # Claim to be "first" without strong evidence
+    first_study_claim:
+      enabled: true
+      confidence_threshold: 0.7  # Below this confidence, trigger check
+
+    # Claims of being "novel" or "unprecedented"
+    novelty_claim:
+      enabled: true
+      ranking_required: 5  # Only check 5-star novelty claims
+
+    # Contradiction of highly-cited work
+    contradiction_high_citation:
+      enabled: true
+      citation_threshold: 100  # Trigger if contradicting papers with 100+ citations
+
+    # Implausible methodological claims
+    implausible_claim:
+      enabled: true
+      confidence_threshold: 0.6
+
+    # Missing citations for well-known results
+    missing_well_known_citation:
+      enabled: true
+      citation_threshold: 500
+
+  # Search parameters for verification
+  verification_search:
+    limit: 10  # Number of papers to check per verification
+    min_citation_count: 5  # Lower threshold for verification searches
+    year_range: 10  # Look back 10 years
+
+
+# ============================================================================
+# STAGE 4: CRITIC (SYNTHESIZER) SETTINGS
+# ============================================================================
+critic:
+  # Include research trajectory section in review
+  include_research_trajectory: true
+
+  # Research trajectory section template
+  trajectory_template: |
+    ## Research Trajectory and Position
+
+    This paper [position] within the current research landscape.
+
+    ### State of the Art
+    {baseline_summary}
+
+    ### Key Contributions
+    {contributions}
+
+    ### Novelty Assessment
+    {novelty_assessment}
+
+  # How to weigh novelty in final recommendation
+  novelty_impact_on_decision:
+    high: "boost"      # High novelty boosts recommendation
+    moderate: "maintain"  # Moderate novelty maintains current recommendation
+    low: "review"      # Low novelty triggers closer scrutiny
+
+  # Incorporate fact-checker results
+  include_fact_check_summary: true
+
+
+# ============================================================================
+# SEARCH QUERY GENERATION
+# ============================================================================
+query_generation:
+  # Strategy for extracting search keywords from paper
+  keyword_extraction:
+    # Sources to extract keywords from
+    sources:
+      - title        # Extract from paper title
+      - abstract     # Extract from abstract
+      - keywords     # Use explicit keywords section
+      - metadata     # Extract from domain-specific metadata
+
+    # Minimum number of keywords to generate
+    min_keywords: 3
+
+    # Maximum number of keywords to use in search
+    max_keywords: 8
+
+    # How to combine keywords for search
+    combination_method: "all"  # "all", "any", "phrase"
+
+
+# ============================================================================
+# CACHING SETTINGS
+# ============================================================================
+caching:
+  # Enable caching of literature search results
+  enabled: true
+
+  # Cache directory
+  cache_dir: "literature_cache"
+
+  # Cache TTL in seconds (default: 7 days)
+  ttl: 604800
+
+  # Cache key format
+  key_format: "{query}_{limit}_{min_citation}"
+
+
+# ============================================================================
+# OUTPUT SETTINGS
+# ============================================================================
+output:
+  # Include full baseline reference in output
+  include_baseline_reference: true
+
+  # Include all fact-check results in output
+  include_all_fact_checks: true
+
+  # Include search query details
+  include_search_queries: true
+
+  # Format for literature-related sections
+  format: "markdown"  # "markdown", "json", "both"
+
+
+# ============================================================================
+# DOMAIN-SPECIFIC SETTINGS
+# ============================================================================
+# These can be overridden by domain-specific config files
+
+domains:
+  development_economics:
+    # Prioritize recent work (fast-moving field)
+    recency_years: 3
+    # Higher citation threshold for established field
+    citation_count_min: 20
+
+  machine_learning:
+    # Very fast-moving, prioritize recent work
+    recency_years: 2
+    # Lower citation threshold (newer methods)
+    citation_count_min: 5
+
+  theoretical_cs:
+    # Slower moving, more weight on classic papers
+    recency_years: 10
+    # Higher citation threshold
+    citation_count_min: 50
+
+  biomedical:
+    # Use PubMed as primary source
+    primary_source: "pubmed"
+    # Moderate recency
+    recency_years: 5
+    # Higher citation threshold
+    citation_count_min: 25

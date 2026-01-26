@@ -1,0 +1,109 @@
+{
+  "config_hash": "679cb7d7d15b17fc4d9f4d5972e45b4a",
+  "papers": {
+    "2601.12369v1.pdf": {
+      "review": {
+        "paper_id": "02480881-4572-48fc-b8e2-27d569e198c5",
+        "paper_title": "Fudan NLP Lab 2026-1-21",
+        "paper_filename": "2601.12369v1.pdf",
+        "overall_score": 56.599999999999994,
+        "weighted_breakdown": {
+          "data_quality": {
+            "score": 4,
+            "weight": 10,
+            "weighted_score": 8.0
+          },
+          "empirical_rigor": {
+            "score": 4,
+            "weight": 18,
+            "weighted_score": 14.4
+          },
+          "identification_strategy": {
+            "score": 0,
+            "weight": 15,
+            "weighted_score": 0.0
+          },
+          "originality_novelty": {
+            "score": 4,
+            "weight": 10,
+            "weighted_score": 8.0
+          },
+          "policy_relevance": {
+            "score": 3,
+            "weight": 12,
+            "weighted_score": 7.199999999999999
+          },
+          "presentation_clarity": {
+            "score": 4,
+            "weight": 8,
+            "weighted_score": 6.4
+          },
+          "statistical_robustness": {
+            "score": 1,
+            "weight": 15,
+            "weighted_score": 3.0
+          },
+          "theoretical_contribution": {
+            "score": 4,
+            "weight": 12,
+            "weighted_score": 9.600000000000001
+          }
+        },
+        "recommendation": "Revise and Resubmit",
+        "recommendation_rationale": "The paper introduces a valuable and original benchmark but contains critical methodological flaws in statistical analysis and causal identification that must be addressed. The overall weighted score of 56.6 reflects these significant weaknesses, requiring substantial revisions before the work can be considered for acceptance.",
+        "executive_summary": "This paper introduces TaxoBench, a novel benchmark designed to evaluate Deep Research Agents' ability to write academic surveys by assessing both retrieval and organizational capabilities. The work demonstrates significant strengths in its theoretical contribution, originality, and high-quality dataset construction based on expert-authored taxonomies. However, critical weaknesses in statistical robustness and causal identification strategy, along with limited policy relevance, substantially undermine the overall impact and reliability of the findings, necessitating major revisions.",
+        "detailed_assessment": {
+          "major_strengths": [
+            "Introduces a highly original benchmark (TaxoBench) that fills a significant gap by evaluating survey writing from a human cognition perspective",
+            "Demonstrates strong empirical rigor through comprehensive data collection from authoritative sources and meticulous expert annotation",
+            "Provides a well-structured dual-layer evaluation framework with clear methodologies for assessing retrieval and organization capabilities"
+          ],
+          "major_concerns": [
+            "Lacks any credible causal identification strategy, relying entirely on descriptive evaluation without addressing underlying mechanisms",
+            "Demonstrates weak statistical robustness with no statistical tests, power analysis, or sensitivity checks to validate findings"
+          ],
+          "minor_issues": [
+            "Policy relevance is limited and could be enhanced with discussion of broader implications for stakeholders beyond academic research",
+            "Dataset could be expanded to include more recent surveys and disciplines beyond computer science for greater generalizability",
+            "Presentation, while generally clear, could benefit from more concise language and reduced technical jargon in some sections"
+          ]
+        },
+        "criterion_narrative": {
+          "theoretical_contribution": "The paper makes a significant theoretical contribution by introducing TaxoBench, shifting evaluation focus from surface metrics to the cognitive processes underlying expert survey writing. The dual-layer framework advances understanding of retrieval-organization relationships, though implications for AI development could be more thoroughly explored.",
+          "empirical_rigor": "The study demonstrates strong empirical rigor through comprehensive data collection from 72 highly-cited surveys and meticulous expert annotation processes. The evaluation of multiple models and clear articulation of methodologies enhance reliability, though additional validation through diverse datasets would further strengthen robustness.",
+          "originality_novelty": "The work is highly original, introducing the first benchmark specifically designed to evaluate survey writing capabilities from a human cognition perspective. The focus on expert-like organization and the creation of a comprehensive taxonomy dataset represent significant innovations in the field.",
+          "statistical_robustness": "Statistical robustness is a critical weakness, as the paper lacks statistical tests, power analysis, or sensitivity checks. While correlation coefficients are reported, their significance and reliability are not validated, undermining confidence in the findings.",
+          "policy_relevance": "Policy relevance is moderate, primarily informing automated survey generation tool development. The benchmark's public availability encourages further research, but broader implications for policy and practice are insufficiently explored, limiting real-world impact.",
+          "identification_strategy": "The paper lacks any credible causal identification strategy, focusing exclusively on descriptive performance evaluation without establishing causal frameworks. This absence severely limits understanding of underlying mechanisms and represents a major methodological gap.",
+          "data_quality": "Data quality is excellent, with a well-structured dataset derived from authoritative surveys and annotated by domain experts. Rigorous collection methods and transparency in construction enhance validity, though potential selection biases could be more thoroughly discussed.",
+          "presentation_clarity": "The paper is clearly presented with logical organization and effective use of visual elements. Key findings are succinctly summarized, though some sections could be more concise, and technical jargon may hinder accessibility for broader audiences."
+        },
+        "revision_suggestions": [
+          "Develop and incorporate a credible causal identification strategy or at minimum, explicitly discuss the limitations of the descriptive approach and propose avenues for future causal analysis",
+          "Strengthen statistical analysis by adding significance tests, power calculations, and sensitivity checks for all reported metrics and correlations",
+          "Expand the discussion of policy relevance to address implications for broader stakeholders, including research institutions, funding bodies, and AI development practices",
+          "Enhance the dataset by incorporating more recent surveys and extending coverage to disciplines beyond computer science to improve generalizability",
+          "Conduct additional validation studies using alternative datasets or external benchmarks to further substantiate the findings and methodological approach"
+        ],
+        "decision_confidence": 0.85,
+        "flags": [],
+        "synthesis_timestamp": "2026-01-26T18:51:19.964868",
+        "extractor_model_used": "openai/gpt-4o-mini",
+        "synthesizer_model_used": "deepseek/deepseek-reasoner",
+        "total_cost": 0.023020256,
+        "literature_context": {
+          "baseline_reference": null,
+          "fact_checks": [],
+          "search_queries_made": [],
+          "total_api_calls": 0
+        },
+        "research_trajectory_section": "### Research Trajectory and Position\n\n**\u26a0\ufe0f Note:** Literature grounding was enabled, but the Librarian agent was unable to retrieve baseline papers (possibly due to API rate limits or search constraints). The research trajectory below is based on novelty rankings assigned during extraction without direct comparison to prior work.\n\nThis paper presents contributions in the field of Fudan NLP Lab 2026-1-21...\n\n\n\n**Novelty Assessment:**\nStandard evaluation without literature-grounded novelty assessment.\n\n\n**\u26a0\ufe0f Note on Librarian Contribution:** No baseline papers were retrieved by the Librarian agent (possibly due to API rate limits or search constraints). The novelty rankings above are based solely on the extraction agent's assessment without direct comparison to prior work.\n",
+        "novelty_adjusted_score": 56.599999999999994,
+        "llm_fallback_used": false
+      },
+      "cost": 0.023020256,
+      "timestamp": "2026-01-26T18:51:19.964868"
+    }
+  },
+  "last_updated": "2026-01-27T03:51:19.966644"
+}
