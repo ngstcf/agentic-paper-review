@@ -577,8 +577,44 @@ JUDGE_MODEL=gemini-2.5-pro
             <h2>4b. Literature-Grounded Reviews (New Feature!)</h2>
             <p>The system now supports <strong>literature-grounded reviews</strong> that automatically search for and analyze related papers to ground the assessment in existing research. This feature helps verify novelty claims, identify missing citations, and position the paper within the research landscape.</p>
 
+            <h3>Pipeline Architecture: Dual-Mode Operation</h3>
+            <p>The literature-enhanced pipeline (<code>run_review_with_dir_literature.py</code>) supports <strong>two modes</strong> controlled by the <code>--literature-grounding</code> flag:</p>
+
+            <div class="flex-container">
+                <div class="flex-box">
+                    <h4>Standard Mode (default)</h4>
+                    <p>When <code>--literature-grounding</code> is <strong>NOT</strong> set:</p>
+                    <div style="font-size: 0.85em; text-align: left; margin-top: 10px;">
+                        <div style="margin: 5px 0;">run_review_with_dir_literature.py</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">├─ <strong>Stage 1:</strong> Reader → <code>process_paper_extractions()</code></div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <strong>Stage 2:</strong> Synthesizer → <code>synthesize_review()</code></div>
+                        <div style="margin: 5px 0; padding-left: 30px;">└─ Output: <code>Review</code></div>
+                    </div>
+                </div>
+                <div class="flex-box">
+                    <h4>Literature Mode (enabled)</h4>
+                    <p>When <code>--literature-grounding</code> <strong>IS</strong> set:</p>
+                    <div style="font-size: 0.8em; text-align: left; margin-top: 10px;">
+                        <div style="margin: 5px 0;">run_review_with_dir_literature.py</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">├─ <strong>Stage 1:</strong> Librarian → <code>create_baseline_reference()</code></div>
+                        <div style="margin: 5px 0; padding-left: 15px;">├─ <strong>Stage 2:</strong> Reader → <code>process_paper_extractions_literature()</code></div>
+                        <div style="margin: 5px 0; padding-left: 15px;">├─ <strong>Stage 3:</strong> Fact-Checker → <code>run_fact_checks()</code></div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <strong>Stage 4:</strong> Critic → <code>synthesize_grounded_review()</code></div>
+                        <div style="margin: 5px 0; padding-left: 30px;">└─ Output: <code>GroundedReview</code></div>
+                    </div>
+                </div>
+            </div>
+
+            <p><strong>Key characteristics:</strong></p>
+            <ul>
+                <li>Uses <code>criteria.yaml</code> for evaluation criteria (same as standard pipeline)</li>
+                <li>Literature stages are <strong>optional</strong> — can be enabled/disabled per run</li>
+                <li>Falls back to standard review if literature stages fail</li>
+                <li>Literature config in <code>config/literature_sources.yaml</code></li>
+            </ul>
+
             <h3>What Is Literature Grounding?</h3>
-            <p>Literature grounding adds a 4-stage process that goes beyond standard review:</p>
+            <p>When enabled, literature grounding adds a 4-stage process that goes beyond standard review:</p>
 
             <div class="architecture-flow">
                 <div class="flow-step">
@@ -631,10 +667,15 @@ enabled: true
                 </div>
                 <div class="flex-box">
                     <h4>Method 3: Runtime Flag</h4>
-                    <p>Use the <code>--no-literature</code> flag when running:</p>
-<pre><code># Disable for this run
-python run_review_literature.py \\
-  my_review_run --no-literature
+                    <p>Use the <code>--literature-grounding</code> flag when running:</p>
+<pre><code># Enable literature grounding
+python run_review_with_dir_literature.py \\
+  --run-dir my_review_run \\
+  --literature-grounding
+
+# Standard mode (no literature)
+python run_review_with_dir_literature.py \\
+  --run-dir my_review_run
 </code></pre>
                 </div>
             </div>
