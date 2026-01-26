@@ -520,7 +520,7 @@
                             <span style="color: #007bff;">⚡</span> <strong>2. Literature Grounding</strong> <span style="color: #6c757d;">(if --literature-grounding enabled)</span>
                             <div style="margin-left: 25px; margin-top: 5px;">
                                 <div>├─ <strong>Librarian</strong> → create_baseline_reference()</div>
-                                <div style="margin-left: 20px;">└─ Searches Semantic Scholar, extracts top 5 papers</div>
+                                <div style="margin-left: 20px;">└─ Searches multiple sources (Semantic Scholar + optional World Bank)</div>
                                 <div>├─ <strong>Reader (during extraction)</strong> → adds novelty rankings</div>
                                 <div style="margin-left: 20px;">└─ Compares paper against baseline literature</div>
                                 <div>└─ <strong>Fact-Checker (after extraction)</strong> → run_fact_checks()</div>
@@ -675,7 +675,7 @@ JUDGE_MODEL=gemini-2.5-pro
             <div class="architecture-flow">
                 <div class="flow-step">
                     <h4>Stage 1: Librarian</h4>
-                    <p>Searches Semantic Scholar for relevant papers in the sub-topic, ranks them by citation count, and extracts key findings from the top 5 (configurable in <code>config/literature_sources.yaml</code>) to create a baseline reference.</p>
+                    <p>Searches multiple literature sources (Semantic Scholar + optional World Bank) for relevant papers in the sub-topic, ranks them by citation count, and extracts key findings from the top 5 (configurable in <code>config/literature_sources.yaml</code>) to create a baseline reference.</p>
                 </div>
                 <div class="flow-arrow">&rarr;</div>
                 <div class="flow-step">
@@ -736,8 +736,45 @@ python run_review_with_dir_literature.py \\
                 </div>
             </div>
 
-            <h3>Semantic Scholar API Setup</h3>
-            <p>Literature grounding uses Semantic Scholar's free-tier API (100 requests/minute). For higher limits, get an API key:</p>
+            <h3>Literature Sources Configuration</h3>
+            <p>The system supports multiple literature sources that can be enabled/disabled in <code>config/literature_sources.yaml</code>:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Enabled By Default</th>
+                        <th>Citation Data</th>
+                        <th>Specialization</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Semantic Scholar</strong></td>
+                        <td>✅ Yes</td>
+                        <td>✅ Yes</td>
+                        <td>Broad academic coverage (all fields)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>World Bank</strong></td>
+                        <td>❌ No (opt-in)</td>
+                        <td>❌ No</td>
+                        <td>Development economics, policy reports</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Enabling/Disabling Sources</h4>
+            <p>Edit <code>config/literature_sources.yaml</code> to control which sources are active:</p>
+<pre><code>sources:
+  semantic_scholar:
+    enabled: true   # Primary source, has citations
+  world_bank:
+    enabled: false  # Set to true to enable
+</code></pre>
+
+            <h4>Semantic Scholar API Setup</h4>
+            <p>Semantic Scholar offers a free-tier API (100 requests/minute). For higher limits, get an API key:</p>
             <ol>
                 <li>Visit <a href="https://www.semanticscholar.org/product/api#api-key" target="_blank" rel="noopener noreferrer">https://www.semanticscholar.org/product/api#api-key</a></li>
                 <li>Sign up for a free API key</li>
@@ -746,8 +783,17 @@ python run_review_with_dir_literature.py \\
                 </li>
             </ol>
 
+            <h4>World Bank API</h4>
+            <p>The World Bank API is <strong>free and requires no authentication</strong>. When enabled, it provides:</p>
+            <ul>
+                <li>Development economics working papers and reports</li>
+                <li>Policy documents and publications</li>
+                <li>Open-access PDF availability</li>
+            </ul>
+            <p><em>Note:</em> World Bank papers lack citation counts and will rank lower than Semantic Scholar papers in results.
+
             <div class="note">
-                <strong>Free Tier Works:</strong> The free tier (no API key) supports 100 requests/minute for general queries and 5 requests/minute for paper searches, which is sufficient for most use cases.
+                <strong>Source Priority:</strong> When multiple sources are enabled, papers are sorted by citation count. Semantic Scholar papers (with citations) rank above World Bank papers (without citations).
             </div>
 
             <h3>Literature-Grounded Output</h3>
