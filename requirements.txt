@@ -6,6 +6,8 @@ pandas
 openpyxl
 python-docx
 tenacity ## openai needs it
+requests>=2.31.0  # HTTP client for Semantic Scholar API
+aiohttp>=3.9.0  # Async HTTP (optional, for performance)
 
 ### pip install 'markdown['pdf','docx']
 
