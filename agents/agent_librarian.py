@@ -256,6 +256,10 @@ def create_baseline_reference(
     baseline_count = librarian_config.get('baseline_papers_count', 5)
     recency_years = librarian_config.get('recency_years', 5)
 
+    # Add delay before search to avoid rate limits
+    import time as time_module
+    time_module.sleep(1.0)
+
     baseline_papers = searcher.get_most_cited(
         field_keywords=keywords[:8],  # Limit to avoid overly broad searches
         years=recency_years,
@@ -264,6 +268,8 @@ def create_baseline_reference(
 
     if not baseline_papers:
         print("[Librarian] Warning: No baseline papers found. Using broader search...")
+        # Add delay before retry
+        time_module.sleep(2.0)
         # Try with just the first few keywords
         baseline_papers = searcher.get_most_cited(
             field_keywords=keywords[:3],

@@ -23,6 +23,7 @@ class SearchConfig:
     timeout: int = 30
     max_retries: int = 3
     retry_delay: float = 1.0
+    request_cooldown: float = 2.0  # Cooldown period after rate limit (seconds)
     # Request limits
     max_papers_per_search: int = 100
     min_citation_count: int = 10
@@ -51,6 +52,8 @@ class LiteratureSearcher:
         self.config = config or self._default_config()
         self._session = requests.Session()
         self._api_calls_today = 0
+        self._last_rate_limit_time = None
+        self._rate_limit_hit_count = 0
 
         if self.config.api_key:
             self._session.headers.update({
@@ -288,6 +291,15 @@ class LiteratureSearcher:
         """
         Make HTTP request with retry logic and rate limiting.
         """
+        # Check if we're in cooldown period after recent rate limiting
+        if self._last_rate_limit_time:
+            time_since_limit = time.time() - self._last_rate_limit_time
+            if time_since_limit < self.config.request_cooldown:
+                cooldown_remaining = self.config.request_cooldown - time_since_limit
+                print(f"[Rate Limit] In cooldown period. Waiting {cooldown_remaining:.1f}s...")
+                time.sleep(cooldown_remaining)
+                self._last_rate_limit_time = None  # Reset after cooldown
+
         try:
             response = self._session.get(
                 url,
@@ -295,18 +307,27 @@ class LiteratureSearcher:
                 timeout=self.config.timeout
             )
             response.raise_for_status()
+            # Reset rate limit tracking on success
+            self._rate_limit_hit_count = 0
             return response.json()
 
         except requests.exceptions.HTTPError as e:
             # Rate limiting - wait and retry
             if e.response.status_code == 429:
+                self._last_rate_limit_time = time.time()
+                self._rate_limit_hit_count += 1
+
                 if retry_count < self.config.max_retries:
                     wait_time = self.config.retry_delay * (2 ** retry_count)
-                    print(f"Rate limited. Waiting {wait_time}s before retry...")
+                    print(f"[Rate Limit] Hit {self._rate_limit_hit_count} time(s). Waiting {wait_time}s before retry...")
                     time.sleep(wait_time)
                     return self._make_request(url, params, retry_count + 1)
                 else:
-                    print(f"Max retries exceeded for URL: {url}")
+                    print(f"[Rate Limit] Max retries exceeded for URL: {url}")
+                    print(f"[Rate Limit] Consider: 1) Getting an API key from Semantic Scholar")
+                    print(f"[Rate Limit]              2) Adding delays between searches")
+                    print(f"[Rate Limit]              3) Reducing search frequency")
+                    return None
 
             print(f"HTTP error: {e}")
             return None
