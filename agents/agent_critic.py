@@ -199,6 +199,108 @@ The target paper [position relative to baseline papers].
 """
 
 
+def _create_fallback_review(
+    paper: Paper,
+    extractions: List[NoveltyRankedExtraction],
+    config: Config,
+    base_score: float,
+    breakdown: Dict[str, WeightedBreakdown],
+    recommendation: str,
+    rationale: str,
+    novelty_adjusted_score: Optional[float] = None,
+    literature_context: LiteratureContext = None,
+    research_trajectory: str = ""
+) -> GroundedReview:
+    """
+    Create a fallback review when LLM JSON parsing fails.
+
+    This ensures the system always returns a valid review even when
+    the LLM doesn't return properly formatted JSON.
+    """
+    from core.data_models import DetailedAssessment
+
+    llm_config = config.get_llm_config()
+    final_score = novelty_adjusted_score or base_score
+
+    # Build criterion narratives from extractions
+    criterion_narrative = {}
+    for e in extractions:
+        narrative = f"**Score: {e.score}/100**\n\n{e.score_justification}\n\n"
+        if e.strengths:
+            narrative += "**Strengths:**\n" + "\n".join(f"- {s}" for s in e.strengths[:3]) + "\n\n"
+        if e.weaknesses:
+            narrative += "**Weaknesses:**\n" + "\n".join(f"- {w}" for w in e.weaknesses[:3]) + "\n\n"
+        criterion_narrative[e.criterion_id] = narrative
+
+    # Build detailed assessment
+    all_strengths = []
+    all_weaknesses = []
+    all_issues = []
+
+    for e in extractions:
+        all_strengths.extend(e.strengths[:2])
+        all_weaknesses.extend(e.weaknesses[:2])
+        if e.confidence < 0.7:
+            all_issues.append(f"Low confidence in assessment for {e.criterion_id}")
+
+    detailed_assessment = DetailedAssessment(
+        major_strengths=all_strengths[:5],
+        major_concerns=all_weaknesses[:5],
+        minor_issues=all_issues[:3]
+    )
+
+    # Build revision suggestions
+    revision_suggestions = []
+    for e in extractions:
+        if e.score < 70:
+            revision_suggestions.append(f"Improve {e.criterion_id}: {e.weaknesses[0] if e.weaknesses else 'address concerns noted'}")
+    if not revision_suggestions:
+        revision_suggestions = ["Consider addressing minor reviewer comments"]
+
+    # Calculate costs
+    total_cost = sum(e.cost for e in extractions)
+
+    extractor_model_name = extractions[0].model_used if extractions else "unknown_extractor"
+    synthesizer_model_name = f"{llm_config['synthesizer_provider']}/{llm_config['synthesizer_model']}"
+
+    # Build executive summary
+    executive_summary = f"""This paper was evaluated across {len(extractions)} criteria. The overall score is {final_score:.1f}/100.
+
+**Recommendation:** {recommendation}
+
+**Rationale:** {rationale}
+
+"""
+
+    if research_trajectory:
+        executive_summary += f"\n{research_trajectory}\n"
+
+    # Create the review
+    review = GroundedReview(
+        paper_id=paper.id,
+        paper_title=paper.metadata.title,
+        paper_filename=paper.filename,
+        overall_score=final_score,
+        weighted_breakdown=breakdown,
+        recommendation=recommendation,
+        recommendation_rationale=rationale,
+        executive_summary=executive_summary,
+        detailed_assessment=detailed_assessment,
+        criterion_narrative=criterion_narrative,
+        revision_suggestions=revision_suggestions,
+        decision_confidence=sum(e.confidence for e in extractions) / len(extractions) if extractions else 0.5,
+        synthesizer_model_used=synthesizer_model_name,
+        extractor_model_used=extractor_model_name,
+        total_cost=total_cost,
+        literature_context=literature_context or LiteratureContext(),
+        research_trajectory_section=research_trajectory,
+        novelty_adjusted_score=novelty_adjusted_score
+    )
+
+    print(f"[Critic] Created fallback review for {paper.filename}")
+    return review
+
+
 def synthesize_grounded_review(
     paper: Paper,
     extractions: List[NoveltyRankedExtraction],
@@ -292,46 +394,122 @@ When writing your review, consider how the paper's claims relate to this literat
     if literature_section:
         prompt += literature_section
 
-    # Call LLM
-    response = call_llm(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        provider=llm_config['synthesizer_provider'],
-        model=llm_config['synthesizer_model'],
-        temperature=llm_config['temperature'],
-        max_retries=llm_config['max_retries']
-    )
+    # Call LLM with JSON parsing retry
+    max_json_retries = 3
+    review_data = None
+    raw_response = None
 
-    if not response['success']:
-        print(f"[Critic Error] LLM call failed for {paper.filename}: {response['error']}")
-        return None
+    for json_attempt in range(max_json_retries):
+        response = call_llm(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            provider=llm_config['synthesizer_provider'],
+            model=llm_config['synthesizer_model'],
+            temperature=llm_config['temperature'],
+            max_retries=llm_config['max_retries'],
+            response_format="json"
+        )
 
-    json_text = ""
-    try:
+        if not response['success']:
+            print(f"[Critic Error] LLM call failed for {paper.filename}: {response['error']}")
+            return None
+
         raw_content = response['content']
+        raw_response = raw_content
+        response_len = len(raw_content)
+
+        # Debug logging
+        print(f"[Critic] Attempt {json_attempt + 1}/{max_json_retries}: Response length = {response_len} chars")
+        print(f"[Critic] Model: {llm_config['synthesizer_provider']}/{llm_config['synthesizer_model']}")
+
+        # Try to find JSON in the response
         start_index = raw_content.find('{')
         end_index = raw_content.rfind('}')
 
+        print(f"[Critic] JSON markers: start={start_index}, end={end_index}")
+
         if start_index == -1 or end_index == -1 or end_index < start_index:
-            raise json.JSONDecodeError("Could not find JSON object markers", raw_content, 0)
+            print(f"[Critic Warning] No valid JSON markers found")
+            print(f"[Critic] Response preview (first 300 chars):\n{raw_content[:300]}")
+            print(f"[Critic] Response preview (last 300 chars):\n{raw_content[-300:]}")
 
+            # Check if response looks complete
+            if len(raw_content) < 500:
+                print(f"[Critic] Response suspiciously short - may be incomplete")
+
+            if json_attempt < max_json_retries - 1:
+                print(f"[Critic] Retrying with stricter instructions...")
+                # Add stricter JSON requirement to prompt
+                prompt += "\n\nIMPORTANT: You must respond with valid JSON only. No markdown, no text before/after the JSON."
+                continue
+            else:
+                print(f"[Critic] All retries exhausted. Using fallback review.")
+                # Create fallback review after all retries fail
+                return _create_fallback_review(
+                    paper=paper,
+                    extractions=extractions,
+                    config=config,
+                    base_score=base_score,
+                    breakdown=breakdown,
+                    recommendation=recommendation,
+                    rationale=rationale,
+                    novelty_adjusted_score=novelty_adjusted_score,
+                    literature_context=literature_context,
+                    research_trajectory=research_trajectory
+                )
+
+        # Extract JSON
         json_text = raw_content[start_index:end_index + 1]
-        review_data = json.loads(json_text)
+        json_len = len(json_text)
+        print(f"[Critic] Extracted JSON: {json_len} chars")
 
-        # Calculate costs
-        total_extraction_cost = sum(e.cost for e in extractions)
-        total_cost = total_extraction_cost + response['cost']
+        try:
+            review_data = json.loads(json_text)
+            print(f"[Critic] ✓ JSON parsed successfully on attempt {json_attempt + 1}")
+            break  # Success - exit retry loop
+        except json.JSONDecodeError as e:
+            print(f"[Critic Warning] JSON parsing failed on attempt {json_attempt + 1}: {e}")
+            print(f"[Critic] JSON preview (first 300 chars):\n{json_text[:300]}")
 
-        if 'criterion_narrative' not in review_data or not isinstance(review_data['criterion_narrative'], dict):
-            print(f"[Critic Warning] 'criterion_narrative' not found or not a dict. Setting to empty.")
-            review_data['criterion_narrative'] = {}
+            if json_attempt < max_json_retries - 1:
+                print(f"[Critic] Retrying...")
+                prompt += "\n\nIMPORTANT: Ensure your JSON is properly formatted and complete."
+                continue
+            else:
+                print(f"[Critic] All retries exhausted. Using fallback review.")
+                return _create_fallback_review(
+                    paper=paper,
+                    extractions=extractions,
+                    config=config,
+                    base_score=base_score,
+                    breakdown=breakdown,
+                    recommendation=recommendation,
+                    rationale=rationale,
+                    novelty_adjusted_score=novelty_adjusted_score,
+                    literature_context=literature_context,
+                    research_trajectory=research_trajectory
+                )
 
-        extractor_model_name = extractions[0].model_used if extractions else "unknown_extractor"
-        synthesizer_model_name = f"{llm_config['synthesizer_provider']}/{llm_config['synthesizer_model']}"
+    # If we get here, JSON parsing succeeded
+    if not review_data:
+        print(f"[Critic Error] Unexpected: review_data is None after successful parsing")
+        return None
 
-        # Use the novelty-adjusted score if available, otherwise use base score
-        final_score = novelty_adjusted_score or base_score
+    # Calculate costs
+    total_extraction_cost = sum(e.cost for e in extractions)
+    total_cost = total_extraction_cost + response.get('cost', 0.0)
 
+    if 'criterion_narrative' not in review_data or not isinstance(review_data['criterion_narrative'], dict):
+        print(f"[Critic Warning] 'criterion_narrative' not found or not a dict. Setting to empty.")
+        review_data['criterion_narrative'] = {}
+
+    extractor_model_name = extractions[0].model_used if extractions else "unknown_extractor"
+    synthesizer_model_name = f"{llm_config['synthesizer_provider']}/{llm_config['synthesizer_model']}"
+
+    # Use the novelty-adjusted score if available, otherwise use base score
+    final_score = novelty_adjusted_score or base_score
+
+    try:
         review = GroundedReview(
             paper_id=paper.id,
             paper_title=paper.metadata.title,
@@ -348,13 +526,21 @@ When writing your review, consider how the paper's claims relate to this literat
         )
 
         return review
-
-    except json.JSONDecodeError as e:
-        print(f"[Critic Error] Failed to parse JSON for {paper.filename}: {e}")
-        return None
     except ValidationError as e:
         print(f"[Critic Error] Pydantic validation failed for {paper.filename}: {e}")
-        return None
+        print(f"[Critic] Using fallback review due to validation error")
+        return _create_fallback_review(
+            paper=paper,
+            extractions=extractions,
+            config=config,
+            base_score=base_score,
+            breakdown=breakdown,
+            recommendation=recommendation,
+            rationale=rationale,
+            novelty_adjusted_score=novelty_adjusted_score,
+            literature_context=literature_context,
+            research_trajectory=research_trajectory
+        )
 
 
 # Re-export calculate_recommendation for backward compatibility

@@ -26,7 +26,8 @@ litellm.drop_params = True
 def _call_custom_ollama_bypass(
     system_prompt: str,
     prompt: str,
-    model: str
+    model: str,
+    response_format: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     This is a surgical bypass of litellm to call the custom_openai
@@ -58,10 +59,15 @@ def _call_custom_ollama_bypass(
             {"role": "user", "content": prompt}
         ],
         "temperature": 1.0,               # Rule 1
-        "max_completion_tokens": 8192,    # Rule 2
+        "max_completion_tokens": 16384,   # Rule 2 - Increased for longer reviews
         "stream": False
         # 'max_tokens' is (correctly) NOT included
     }
+
+    # Add JSON mode if requested
+    if response_format == "json":
+        payload["response_format"] = {"type": "json_object"}
+        print(f"[LLM_Wrapper_V8_BYPASS] Enabling JSON mode")
     
     print(f"[LLM_Wrapper_V8_BYPASS] Payload keys: {list(payload.keys())}")
 
@@ -102,21 +108,22 @@ def _call_custom_ollama_bypass(
 def call_llm(
     prompt: str,
     system_prompt: str,
-    provider: str, 
-    model: str,    
+    provider: str,
+    model: str,
     temperature: float,
-    max_retries: int
+    max_retries: int,
+    response_format: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Unified LLM API call with retry logic, cost calculation,
     and a surgical bypass for the 'custom_openai/gpt-5' combination.
     """
     model_string = f"{provider}/{model}"
-    
+
     # --- NEW SURGICAL BYPASS V8 ---
-    
+
    # print(f"\n[LLM_Wrapper_V8_DEBUG] Checking for bypass for provider: '{provider}', model: '{model}'")
-    
+
     # Check for the *one* failing combination
     if provider.strip().lower() == "custom_openai" and model.strip().lower().startswith("gpt-5"):
         # ---
@@ -125,7 +132,8 @@ def call_llm(
         return _call_custom_ollama_bypass(
             system_prompt=system_prompt,
             prompt=prompt,
-            model=model.strip() # Pass the original model name
+            model=model.strip(), # Pass the original model name
+            response_format=response_format
         )
     
     # ---
@@ -134,18 +142,55 @@ def call_llm(
     #print(f"[LLM_Wrapper_V8_DEBUG] ---> No bypass. Proceeding with standard litellm call.")
     
     # 1. Start with standard params
+    # Use higher max_tokens for newer models with larger context windows
+    # deepseek-reasoner: up to 128k output tokens
+    # gemini: up to 8k output tokens
+    # gpt-4: up to 4k/16k output tokens
+    provider_lower = provider.strip().lower()
+    model_lower = model.strip().lower()
+
+    # Set token limits based on model capabilities
+    if "reasoner" in model_lower or "gpt-4" in model_lower or "gemini-2.5" in model_lower:
+        max_tokens_limit = 32768  # Higher limit for reasoning models
+    else:
+        max_tokens_limit = 16384  # Standard limit for other models
+
     params = {
         "num_retries": max_retries,
-        "timeout": 120,
+        "timeout": 300,  # Increased timeout for longer responses (5 minutes)
         "temperature": temperature,
-        "max_tokens": 8192
+        "max_tokens": max_tokens_limit
     }
-    
+
     # 2. Handle the *working* 'openai/gpt-5' variant
     if provider.strip().lower() == "openai" and model.strip().lower().startswith("gpt-5"):
         print("[LLM_Wrapper_V8_DEBUG] Applying 'openai/gpt-5' temperature override.")
         params["temperature"] = 1.0
-        
+
+    # 3. Add JSON mode if requested
+    if response_format == "json":
+        # Different providers have different JSON mode syntax
+        provider_lower = provider.strip().lower()
+
+        if provider_lower in ["openai", "custom_openai"]:
+            # OpenAI and compatible APIs
+            params["response_format"] = {"type": "json_object"}
+            print(f"[LLM] Enabling JSON mode for {provider}/{model}")
+        elif provider_lower == "anthropic":
+            # Anthropic Claude
+            params["response_format"] = {"type": "json_object"}
+            print(f"[LLM] Enabling JSON mode for {provider}/{model}")
+        elif provider_lower == "google":
+            # Google Gemini - different format
+            params["response_format"] = "json_object"
+            print(f"[LLM] Enabling JSON mode for {provider}/{model}")
+        # DeepSeek and others may not support JSON mode explicitly
+        # They rely on prompt engineering instead
+        elif provider_lower == "deepseek":
+            print(f"[LLM] DeepSeek JSON mode via prompt engineering (no native JSON mode)")
+        else:
+            print(f"[LLM] JSON mode requested but {provider} support unknown, using prompt only")
+
     #print(f"[LLM_Wrapper_V8_DEBUG] Final litellm keys: {list(params.keys())}")
 
     try:

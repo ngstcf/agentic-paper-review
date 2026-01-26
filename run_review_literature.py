@@ -26,11 +26,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.data_models import Paper, GroundedReview, BaselineReference, LiteratureContext
 from core.config_loader import Config
-from core.paper_ingestor import ingest_directory
+from core.paper_ingestor import (
+    load_ingestion_cache,
+    save_ingestion_cache,
+    ingest_directory
+)
 from agents.agent_librarian import create_baseline_reference, create_baseline_reference_batch
-from agents.agent_reader import process_paper_extractions_with_novelty
+from agents.agent_reader import process_paper_extractions
 from agents.agent_fact_checker import run_fact_checks, summarize_fact_checks
 from agents.agent_critic import synthesize_grounded_review
+from agents.agent_synthesizer import synthesize_review
 from utilities.output_generator import save_review_markdown, save_consolidated_csv
 from utilities.helpers import load_yaml_config
 
@@ -104,9 +109,6 @@ def run_literature_grounded_review(
             if not baseline:
                 print("[Librarian] Failed to create baseline reference. Falling back to standard review.")
                 # Fall back to standard review
-                from agents.agent_reader import process_paper_extractions
-                from agents.agent_synthesizer import synthesize_review
-
                 extractions = process_paper_extractions(paper, config)
                 review = synthesize_review(paper, extractions, config)
 
@@ -120,7 +122,7 @@ def run_literature_grounded_review(
             # STAGE 2: READER - Extract with Novelty Ranking
             # ====================================================================
             print("\n[Stage 2/4] Reader: Extracting evidence with novelty ranking...")
-            extractions = process_paper_extractions_with_novelty(
+            extractions = process_paper_extractions(
                 paper=paper,
                 config=config,
                 baseline=baseline
@@ -282,15 +284,17 @@ def main():
         print("  - Running in standard review mode")
 
     # Load configuration
-    print(f"\n[Config] Loading from: {run_dir}")
-    config = Config(str(run_dir))
+    config_path = run_dir / "input"
+    print(f"\n[Config] Loading from: {config_path}")
+    config = Config(str(config_path))
     print(f"[Config] Domain: {config.domain}")
 
     # Load literature configuration
     literature_config = {}
     if use_literature:
         try:
-            literature_config = load_yaml_config("config/literature_sources.yaml")
+            literature_config_path = config_path / "literature_sources.yaml"
+            literature_config = load_yaml_config(str(literature_config_path))
             print(f"[Config] Literature config loaded")
         except Exception as e:
             print(f"[Warning] Failed to load literature config: {e}")
@@ -300,13 +304,28 @@ def main():
     # INGESTION
     # ========================================================================
     print("\n[Ingestion] Processing papers...")
-    papers = ingest_directory(str(run_dir / "papers"), config)
+
+    # Setup cache
+    cache_file = run_dir / "ingestion_cache.json"
+    print(f"[Cache] Loading ingestion cache from: {cache_file}")
+    ingestion_cache = load_ingestion_cache(str(cache_file))
+
+    papers, cache_was_updated = ingest_directory(
+        str(run_dir / "papers"),
+        ingestion_cache,
+        str(cache_file)
+    )
 
     if not papers:
         print("[Ingestion] No papers found to review")
         return 1
 
     print(f"[Ingestion] ✓ Processed {len(papers)} papers")
+
+    # Save cache if updated
+    if cache_was_updated:
+        save_ingestion_cache(ingestion_cache, str(cache_file))
+        print("[Cache] ✓ Saved updated ingestion cache")
 
     # ========================================================================
     # REVIEW
