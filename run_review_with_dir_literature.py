@@ -162,12 +162,17 @@ def _calculate_novelty_adjusted_score(
 
     Args:
         base_score: The base calculated score
-        extractions: List of novelty-ranked extractions
+        extractions: List of novelty-ranked extractions (or standard extractions)
         config: System configuration
 
     Returns:
         Novelty-adjusted score
     """
+    # Check if extractions have novelty rankings
+    if not extractions or not hasattr(extractions[0], 'novelty_ranking'):
+        # Standard extractions without novelty rankings - no adjustment
+        return base_score
+
     # Calculate average novelty ranking
     novelty_scores = [e.novelty_ranking for e in extractions]
     avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
@@ -219,17 +224,6 @@ def enhance_review_with_literature(
     """
     from core.data_models import LiteratureContext
 
-    if not baseline:
-        print(f"   ⚠️  No baseline available, returning standard review as GroundedReview")
-        # Convert Review to GroundedReview without enhancement
-        return GroundedReview(
-            **base_review.model_dump(),
-            literature_context=LiteratureContext(),
-            research_trajectory_section="",
-            novelty_adjusted_score=None,
-            llm_fallback_used=False
-        )
-
     try:
         # Generate research trajectory section from baseline and extractions
         print(f"   📚 [Librarian] Generating research trajectory section...", flush=True)
@@ -250,26 +244,33 @@ def enhance_review_with_literature(
                 research_trajectory += f"**State of the Art:** {baseline.key_findings_summary}\n\n"
         else:
             research_trajectory += f"**⚠️ Note:** Literature grounding was enabled, but the Librarian agent was unable to retrieve baseline papers (possibly due to API rate limits or search constraints). The research trajectory below is based on novelty rankings assigned during extraction without direct comparison to prior work.\n\n"
-            research_trajectory += f"This paper presents contributions in the field of {paper.title[:80]}...\n\n"
+            research_trajectory += f"This paper presents contributions in the field of {paper.metadata.title[:80] if paper.metadata.title else 'the topic'}...\n\n"
 
-        # Add novelty context from extractions
-        high_novelty = [e for e in extractions if e.novelty_ranking >= 4]
-        if high_novelty:
-            topics = ", ".join([e.criterion_id.replace("_", " ") for e in high_novelty[:3]])
-            research_trajectory += f"The paper's key contribution is addressing aspects of {topics}. "
+        # Add novelty context from extractions (only if literature-enhanced)
+        has_novelty_rankings = extractions and hasattr(extractions[0], 'novelty_ranking')
 
-        # Add novelty scores
-        novelty_scores = [e.novelty_ranking for e in extractions]
-        avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
-        research_trajectory += f"\n\n**Novelty Assessment:**\n"
-        research_trajectory += f"Across all evaluated criteria, the paper demonstrates {'high novelty' if avg_novelty >= 4 else 'moderate novelty' if avg_novelty >= 3 else 'limited novelty'} (average: {avg_novelty:.1f}/5). "
-        research_trajectory += "Key novel aspects include:\n"
-        for e in extractions:
-            if e.novelty_ranking >= 4:
-                justification = e.score_justification[:100] + "..." if len(e.score_justification) > 100 else e.score_justification
-                research_trajectory += f"\n- **{e.criterion_id.replace('_', ' ').title()}**: {justification}"
+        if has_novelty_rankings:
+            high_novelty = [e for e in extractions if e.novelty_ranking >= 4]
+            if high_novelty:
+                topics = ", ".join([e.criterion_id.replace("_", " ") for e in high_novelty[:3]])
+                research_trajectory += f"The paper's key contribution is addressing aspects of {topics}. "
 
-        research_trajectory += f"\n\n**Verification Note:** While the review is based on comprehensive analysis of the target paper, claims about specific metrics or percentages should be verified against the full manuscript.\n"
+            # Add novelty scores
+            novelty_scores = [e.novelty_ranking for e in extractions]
+            avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
+            research_trajectory += f"\n\n**Novelty Assessment:**\n"
+            research_trajectory += f"Across all evaluated criteria, the paper demonstrates {'high novelty' if avg_novelty >= 4 else 'moderate novelty' if avg_novelty >= 3 else 'limited novelty'} (average: {avg_novelty:.1f}/5). "
+            research_trajectory += "Key novel aspects include:\n"
+            for e in extractions:
+                if e.novelty_ranking >= 4:
+                    justification = e.score_justification[:100] + "..." if len(e.score_justification) > 100 else e.score_justification
+                    research_trajectory += f"\n- **{e.criterion_id.replace('_', ' ').title()}**: {justification}"
+
+            research_trajectory += f"\n\n**Verification Note:** While the review is based on comprehensive analysis of the target paper, claims about specific metrics or percentages should be verified against the full manuscript.\n"
+        else:
+            # No novelty rankings available (standard extraction)
+            research_trajectory += f"\n\n**Novelty Assessment:**\n"
+            research_trajectory += "Standard evaluation without literature-grounded novelty assessment.\n"
 
         print(f"   📊 [Novelty] Calculating novelty-adjusted score...", flush=True)
         novelty_adjusted_score = _calculate_novelty_adjusted_score(
@@ -277,6 +278,13 @@ def enhance_review_with_literature(
             extractions=extractions,
             config=config
         )
+
+        # Add note about librarian contribution effectiveness
+        novelty_adjustment = novelty_adjusted_score - base_review.overall_score
+        if abs(novelty_adjustment) < 1.0 and has_baseline_papers:
+            research_trajectory += f"\n\n**⚠️ Note on Librarian Contribution:** While {len(baseline.baseline_papers)} baseline papers were retrieved, the minimal novelty adjustment ({novelty_adjustment:+.1f}) suggests they may not have been directly relevant to the target paper's specific contributions. The novelty rankings above should be interpreted with this limitation in mind.\n"
+        elif not has_baseline_papers:
+            research_trajectory += f"\n\n**⚠️ Note on Librarian Contribution:** No baseline papers were retrieved by the Librarian agent (possibly due to API rate limits or search constraints). The novelty rankings above are based solely on the extraction agent's assessment without direct comparison to prior work.\n"
 
         # Build literature context
         literature_context = LiteratureContext(
