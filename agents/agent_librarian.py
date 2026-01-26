@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from core.data_models import Paper, BaselineReference, RelatedPaperMetadata
 from core.config_loader import Config
 from core.literature_searcher import LiteratureSearcher, SearchConfig
+from core.world_bank_searcher import WorldBankSearcher, WorldBankSearchConfig
 from core.llm_wrapper import call_llm
 from utilities.helpers import load_yaml_config
 
@@ -139,6 +140,141 @@ Return your answer as a JSON object:
         return ["Failed to parse findings"]
 
 
+def _get_active_sources(
+    literature_config: Dict[str, Any]
+) -> List[str]:
+    """
+    Get list of active literature sources.
+
+    Users enable/disable sources in config/literature_sources.yaml:
+    sources:
+      semantic_scholar:
+        enabled: true
+      world_bank:
+        enabled: false
+
+    Args:
+        literature_config: Literature configuration
+
+    Returns:
+        List of enabled source names
+    """
+    sources_config = literature_config.get("sources", {})
+    active = []
+
+    # Check Semantic Scholar
+    if sources_config.get("semantic_scholar", {}).get("enabled", True):
+        active.append("semantic_scholar")
+
+    # Check World Bank
+    if sources_config.get("world_bank", {}).get("enabled", False):
+        active.append("world_bank")
+
+    return active
+
+
+def _deduplicate_papers(
+    papers: List[RelatedPaperMetadata]
+) -> List[RelatedPaperMetadata]:
+    """
+    Deduplicate papers by title (case-insensitive).
+
+    Args:
+        papers: List of papers to deduplicate
+
+    Returns:
+        Deduplicated list
+    """
+    seen = set()
+    deduped = []
+    for paper in papers:
+        title_lower = paper.title.lower().strip()
+        if title_lower not in seen:
+            seen.add(title_lower)
+            deduped.append(paper)
+    return deduped
+
+
+def _search_multiple_sources(
+    keywords: List[str],
+    recency_years: int,
+    limit: int,
+    literature_config: Dict[str, Any]
+) -> List[RelatedPaperMetadata]:
+    """
+    Search multiple literature sources and combine results.
+
+    Args:
+        keywords: Search keywords
+        recency_years: Years to look back
+        limit: Total number of papers to return
+        literature_config: Literature configuration
+
+    Returns:
+        Combined and deduplicated list of papers
+    """
+    all_papers = []
+    active_sources = _get_active_sources(literature_config)
+    print(f"[Librarian] Active sources: {', '.join(active_sources)}")
+
+    # Search Semantic Scholar
+    if "semantic_scholar" in active_sources:
+        semantic_config = literature_config.get("sources", {}).get("semantic_scholar", {})
+        if semantic_config.get("enabled", True):
+            print("[Librarian] Searching Semantic Scholar...")
+            search_config = SearchConfig(
+                api_key=semantic_config.get('api_key'),
+                base_url=semantic_config.get('base_url', "https://api.semanticscholar.org/graph/v1"),
+                timeout=semantic_config.get('timeout', 30),
+                max_retries=semantic_config.get('max_retries', 3)
+            )
+            searcher = LiteratureSearcher(search_config)
+
+            semantic_papers = searcher.get_most_cited(
+                field_keywords=keywords[:8],
+                years=recency_years,
+                limit=limit
+            )
+            all_papers.extend(semantic_papers)
+            print(f"[Librarian]   Semantic Scholar: {len(semantic_papers)} papers")
+
+    # Search World Bank
+    if "world_bank" in active_sources:
+        wb_config = literature_config.get("sources", {}).get("world_bank", {})
+        if wb_config.get("enabled", False):
+            import time as time_module
+            time_module.sleep(1.0)  # Delay before World Bank search
+
+            print("[Librarian] Searching World Bank...")
+            wb_search_config = WorldBankSearchConfig(
+                base_url=wb_config.get('base_url', "https://search.worldbank.org/api/v3/wds"),
+                timeout=wb_config.get('timeout', 30),
+                max_retries=wb_config.get('max_retries', 3)
+            )
+            wb_searcher = WorldBankSearcher(wb_search_config)
+
+            # Calculate date range for World Bank
+            from datetime import datetime, timezone
+            current_year = datetime.now(timezone.utc).year
+            start_date = f"{current_year - recency_years}-01-01"
+            end_date = f"{current_year}-12-31"
+
+            wb_papers = wb_searcher.search_by_keywords(
+                keywords=keywords[:5],
+                limit=limit // 2,  # Get fewer from World Bank
+                start_date=start_date,
+                end_date=end_date
+            )
+            all_papers.extend(wb_papers)
+            print(f"[Librarian]   World Bank: {len(wb_papers)} papers")
+
+    # Deduplicate by title
+    all_papers = _deduplicate_papers(all_papers)
+    print(f"[Librarian] Total after deduplication: {len(all_papers)} papers")
+
+    return all_papers
+
+
 def _generate_baseline_summary(
     sub_topic: str,
     baseline_papers: List[RelatedPaperMetadata],
@@ -228,16 +364,6 @@ def create_baseline_reference(
         literature_config = load_yaml_config("config/literature_sources.yaml")
 
     librarian_config = literature_config.get('librarian', {})
-    semantic_config = literature_config.get('semantic_scholar', {})
-
-    # Initialize searcher
-    search_config = SearchConfig(
-        api_key=semantic_config.get('api_key'),
-        base_url=semantic_config.get('base_url'),
-        timeout=semantic_config.get('timeout', 30),
-        max_retries=semantic_config.get('max_retries', 3)
-    )
-    searcher = LiteratureSearcher(search_config)
 
     # Step 1: Extract search keywords
     print("[Librarian] Step 1: Extracting search keywords...")
@@ -251,8 +377,8 @@ def create_baseline_reference(
         seen = set()
         keywords = [x for x in keywords if not (x in seen or seen.add(x))]
 
-    # Step 2: Search for most cited papers
-    print("[Librarian] Step 2: Searching for most cited papers...")
+    # Step 2: Search multiple sources for papers
+    print("[Librarian] Step 2: Searching literature sources...")
     baseline_count = librarian_config.get('baseline_papers_count', 5)
     recency_years = librarian_config.get('recency_years', 5)
 
@@ -260,21 +386,23 @@ def create_baseline_reference(
     import time as time_module
     time_module.sleep(1.0)
 
-    baseline_papers = searcher.get_most_cited(
-        field_keywords=keywords[:8],  # Limit to avoid overly broad searches
-        years=recency_years,
-        limit=baseline_count * 2  # Get more to filter
+    baseline_papers = _search_multiple_sources(
+        keywords=keywords,
+        recency_years=recency_years,
+        limit=baseline_count * 2,  # Get more to filter
+        literature_config=literature_config
     )
 
     if not baseline_papers:
         print("[Librarian] Warning: No baseline papers found. Using broader search...")
         # Add delay before retry
         time_module.sleep(2.0)
-        # Try with just the first few keywords
-        baseline_papers = searcher.get_most_cited(
-            field_keywords=keywords[:3],
-            years=recency_years + 2,
-            limit=baseline_count
+        # Try with just the first few keywords and broader year range
+        baseline_papers = _search_multiple_sources(
+            keywords=keywords[:3],
+            recency_years=recency_years + 2,
+            limit=baseline_count,
+            literature_config=literature_config
         )
 
     # Sort by citation count and take top N

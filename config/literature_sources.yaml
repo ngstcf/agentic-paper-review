@@ -13,24 +13,43 @@ enabled: true
 allow_env_override: true
 
 
-# Semantic Scholar API Settings
-semantic_scholar:
-  # API endpoint (uses official public API by default)
-  base_url: "https://api.semanticscholar.org/graph/v1"
+# ============================================================================
+# LITERATURE SOURCES CONFIGURATION
+# ============================================================================
+# Configure which sources to use for literature search
 
-  # API key - get from https://www.semanticscholar.org/product/api#api-key
-  # Leave empty to use free tier (100 req/min for general, 5 req/min for search)
-  api_key: null  # Set via SEMANTIC_SCHOLAR_API_KEY environment variable
+sources:
+  semantic_scholar:
+    enabled: true
+    # API endpoint (uses official public API by default)
+    base_url: "https://api.semanticscholar.org/graph/v1"
 
-  # Request settings
-  timeout: 30
-  max_retries: 3
-  retry_delay: 1.0
+    # API key - get from https://www.semanticscholar.org/product/api#api-key
+    # Leave empty to use free tier (100 req/min for general, 5 req/min for search)
+    api_key: null  # Set via SEMANTIC_SCHOLAR_API_KEY environment variable
 
-  # Rate limits (free tier defaults)
-  max_papers_per_search: 100
-  requests_per_minute: 100
-  search_requests_per_minute: 5
+    # Request settings
+    timeout: 30
+    max_retries: 3
+    retry_delay: 1.0
+
+    # Rate limits (free tier defaults)
+    max_papers_per_search: 100
+    requests_per_minute: 100
+    search_requests_per_minute: 5
+
+  world_bank:
+    enabled: false  # Set to true to enable World Bank searches
+    # API endpoint (World Bank API is free and requires no authentication)
+    base_url: "https://search.worldbank.org/api/v3/wds"
+
+    # Request settings
+    timeout: 30
+    max_retries: 3
+    retry_delay: 1.0
+
+    # Maximum results per search
+    max_papers_per_search: 50
 
 
 # ============================================================================
@@ -240,7 +259,7 @@ domains:
     citation_count_min: 50
 
   biomedical:
-    # Use PubMed as primary source
+    # Use PubMed as primary source (future)
     primary_source: "pubmed"
     # Moderate recency
     recency_years: 5
