@@ -719,6 +719,45 @@ python run_review_literature.py \\
             <h2>4c. Standalone Literature Review Pipeline</h2>
             <p>The standalone literature review pipeline is a <strong>dedicated workflow</strong> for papers that require comprehensive literature analysis. Unlike the literature-grounded enhancement (Section 4b), this pipeline uses <strong>only</strong> the literature-grounded agents and does not include a fallback to standard review.</p>
 
+            <h3>Pipeline Architecture</h3>
+            <p>The standalone pipeline (<code>run_review_literature.py</code>) implements a pure 4-stage literature-grounded workflow:</p>
+
+            <div class="architecture-flow">
+                <div class="flow-step">
+                    <h4>run_review_literature.py</h4>
+                    <p><strong>Standalone Pipeline</strong></p>
+                    <div style="font-size: 0.85em; text-align: left; margin-top: 10px;">
+                        <div style="margin: 5px 0;">├─ <strong>Stage 1:</strong> Librarian</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <code>create_baseline_reference()</code></div>
+                        <div style="margin: 5px 0;">├─ <strong>Stage 2:</strong> Reader</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <code>process_paper_extractions_literature()</code></div>
+                        <div style="margin: 5px 0;">├─ <strong>Stage 3:</strong> Fact-Checker</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <code>run_fact_checks()</code></div>
+                        <div style="margin: 5px 0;">└─ <strong>Stage 4:</strong> Critic</div>
+                        <div style="margin: 5px 0; padding-left: 15px;">└─ <code>synthesize_grounded_review()</code></div>
+                    </div>
+                </div>
+                <div class="flow-arrow">&rarr;</div>
+                <div class="flow-step">
+                    <h4>Output</h4>
+                    <p><strong>GroundedReview</strong></p>
+                    <ul style="text-align: left; font-size: 0.85em; margin-top: 10px; padding-left: 15px;">
+                        <li>Research Trajectory</li>
+                        <li>Novelty Rankings (1-5)</li>
+                        <li>Fact-Check Results</li>
+                        <li>Novelty-Adjusted Score</li>
+                    </ul>
+                </div>
+            </div>
+
+            <p><strong>Key characteristics:</strong></p>
+            <ul>
+                <li>Configured via <code>literature_sources.yaml</code> (not <code>criteria.yaml</code>)</li>
+                <li>Always runs all 4 stages (no fallback to standard review)</li>
+                <li>Uses dedicated <code>literature/</code> directory for baseline papers</li>
+                <li>Stage-specific LLM parameters (Librarian, Reader, Fact-Checker, Critic)</li>
+            </ul>
+
             <h3>Key Differences from Literature-Grounded Enhancement</h3>
             <table>
                 <thead>
