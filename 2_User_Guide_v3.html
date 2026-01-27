@@ -757,6 +757,12 @@ python run_review_with_dir_literature.py \\
                         <td>Broad academic coverage (all fields)</td>
                     </tr>
                     <tr>
+                        <td><strong>Arxiv</strong></td>
+                        <td>✅ Yes (new!)</td>
+                        <td>❌ No</td>
+                        <td>Preprints, CS/physics/math, rate-limit resistant</td>
+                    </tr>
+                    <tr>
                         <td><strong>World Bank</strong></td>
                         <td>❌ No (opt-in)</td>
                         <td>❌ No</td>
@@ -770,6 +776,8 @@ python run_review_with_dir_literature.py \\
 <pre><code>sources:
   semantic_scholar:
     enabled: true   # Primary source, has citations
+  arxiv:
+    enabled: true    # Good fallback for Semantic Scholar rate limits
   world_bank:
     enabled: false  # Set to true to enable
 </code></pre>
@@ -784,6 +792,16 @@ python run_review_with_dir_literature.py \\
                 </li>
             </ol>
 
+            <h4>Arxiv API</h4>
+            <p>Arxiv is a <strong>free, open-access archive</strong> that serves as an excellent fallback when Semantic Scholar rate limits are reached. When enabled, it provides:</p>
+            <ul>
+                <li>Preprints and published papers across CS, physics, math, and more</li>
+                <li>No API key required</li>
+                <li>No strict rate limits (1 request per 3 seconds recommended)</li>
+                <li>Open-access PDF availability</li>
+            </ul>
+            <p><em>Note:</em> Arxiv papers lack citation counts and will rank lower than Semantic Scholar papers in results. Use as a fallback when Semantic Scholar is rate-limited.</p>
+
             <h4>World Bank API</h4>
             <p>The World Bank API is <strong>free and requires no authentication</strong>. When enabled, it provides:</p>
             <ul>
@@ -794,7 +812,7 @@ python run_review_with_dir_literature.py \\
             <p><em>Note:</em> World Bank papers lack citation counts and will rank lower than Semantic Scholar papers in results.
 
             <div class="note">
-                <strong>Source Priority:</strong> When multiple sources are enabled, papers are sorted by citation count. Semantic Scholar papers (with citations) rank above World Bank papers (without citations).
+                <strong>Source Priority:</strong> When multiple sources are enabled, the system uses a quota-based allocation with spill-over to ensure fair representation. Papers with citations rank above those without. Each source gets an equal quota (baseline_papers_count ÷ number of sources), with unused slots spilling over to other sources.
             </div>
 
             <div class="warning">
