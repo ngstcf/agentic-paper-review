@@ -367,6 +367,7 @@ class LiteratureSearcher:
                 venue=data.get("venue"),
                 url=data.get("url"),
                 open_access_pdf=open_access_pdf,
+                source="semantic_scholar",
             )
 
         except Exception as e:

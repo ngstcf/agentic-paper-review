@@ -240,8 +240,9 @@ def run_standard_review(
 def main():
     parser = argparse.ArgumentParser(
         description="Run literature-grounded academic paper reviews\n\n"
-                    "Default: Literature grounding is ENABLED (based on config/literature_sources.yaml)\n"
-                    "Use --no-literature to disable and run in standard mode instead.",
+                    "DEFAULT: Literature grounding is ENABLED (based on config/literature_sources.yaml)\n\n"
+                    "Without --no-literature: Literature-grounded review (Librarian → Reader → Fact-Checker → Critic)\n"
+                    "With --no-literature: Standard review only (disables literature features)",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
@@ -251,7 +252,7 @@ def main():
     parser.add_argument(
         "--no-literature",
         action="store_true",
-        help="Disable literature grounding and run in standard review mode (overrides config file)"
+        help="Disable literature grounding and run in standard review mode (default: literature grounding is ENABLED)"
     )
     parser.add_argument(
         "--output-dir",

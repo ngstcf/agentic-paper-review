@@ -38,6 +38,26 @@ sources:
     requests_per_minute: 100
     search_requests_per_minute: 5
 
+  arxiv:
+    enabled: true # Set to true to enable Arxiv searches (good fallback for Semantic Scholar rate limits)
+    # API endpoint (Arxiv API is free and requires no authentication)
+    base_url: "http://export.arxiv.org/api/query"
+
+    # Request settings
+    timeout: 30
+    max_retries: 3
+    retry_delay: 1.0
+
+    # Rate limiting (Arxiv requests 1 request per 3 seconds)
+    min_request_interval: 3.0
+
+    # Maximum results per search
+    max_papers_per_search: 100
+
+    # Optional: Filter by Arxiv categories (e.g., cs.AI, cs.LG, math.NA)
+    # Leave empty to search all categories
+    categories: []
+
   world_bank:
     enabled: false  # Set to true to enable World Bank searches
     # API endpoint (World Bank API is free and requires no authentication)
@@ -57,7 +77,7 @@ sources:
 # ============================================================================
 librarian:
   # Number of baseline papers to retrieve
-  baseline_papers_count: 5
+  baseline_papers_count: 6
 
   # Minimum citation count for baseline papers
   citation_count_min: 10

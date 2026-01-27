@@ -247,7 +247,8 @@ class WorldBankSearcher:
                 url=url,
                 open_access_pdf=pdf_url,
                 key_findings=[],  # Will be populated by LLM if needed
-                relevance_score=0.0  # Could implement relevance scoring
+                relevance_score=0.0,  # Could implement relevance scoring
+                source="world_bank",
             )
 
         except Exception as e:

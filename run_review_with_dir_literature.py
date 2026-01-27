@@ -23,7 +23,7 @@ from core.paper_ingestor import (
 from agents.agent_extractor import process_paper_extractions
 from agents.agent_synthesizer import synthesize_review
 from utilities.output_generator import save_review_markdown, save_consolidated_csv
-from utilities.helpers import setup_logging, get_config_hash
+from utilities.helpers import setup_logging, get_config_hash, load_yaml_config
 from core.data_models import Review, GroundedReview, BaselineReference, FactCheckResult
 
 # Literature grounding imports
@@ -324,14 +324,18 @@ def enhance_review_with_literature(
 def main():
     parser = argparse.ArgumentParser(
         description="Run the academic review system (standard or literature-grounded)\n\n"
-                    "Default: Standard review mode (no literature grounding)\n"
-                    "Use --literature-grounding to enable literature enhancement (Librarian → Reader → Fact-Checker → Enhanced Synthesis)",
+                    "DEFAULT: Standard review mode (NO literature grounding)\n"
+                    "To enable literature features, you MUST use the --literature-grounding flag.\n\n"
+                    "Without --literature-grounding: Standard review only\n"
+                    "With --literature-grounding: Librarian → Reader → Fact-Checker → Enhanced Synthesis",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--run-dir", required=True, help="Directory for this run")
     parser.add_argument("--override-config", help="Path to a config file to override the default")
     parser.add_argument("--force-reload", action="store_true", help="Force reload of configuration")
-    parser.add_argument("--literature-grounding", action="store_true", help="Enable literature grounding enhancement (Librarian → Reader → Fact-Checker → Enhanced Synthesis)")
+    parser.add_argument("--literature-grounding", action="store_true",
+                        help="Enable literature grounding enhancement (default: DISABLED). "
+                             "Add this flag to enable: Librarian → Reader → Fact-Checker → Enhanced Synthesis")
     args = parser.parse_args()
     
     start_time = time.time()
@@ -546,7 +550,14 @@ def main():
             fact_check_start = time.time()
 
             try:
-                fact_checks = run_fact_checks(paper, extractions, config) or []
+                # Load literature config for fact-checker
+                literature_config = load_yaml_config("config/literature_sources.yaml")
+                fact_checks = run_fact_checks(
+                    extractions=extractions,
+                    criteria=config.get_criteria(),
+                    config=config,
+                    literature_config=literature_config
+                ) or []
                 fact_check_time = time.time() - fact_check_start
 
                 if fact_checks:

@@ -8,7 +8,15 @@ import json
 from datetime import datetime
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the review system with custom LLM parameters")
+    parser = argparse.ArgumentParser(
+        description="Run the review system with custom LLM parameters\n\n"
+                    "DEFAULT: Standard review mode (NO literature grounding)\n"
+                    "To enable literature features, use --literature-grounding flag.\n\n"
+                    "Script selection:\n"
+                    "  --literature-grounding present → run_review_with_dir_literature.py\n"
+                    "  --literature-grounding absent  → run_review_with_dir.py (standard)",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--run-dir", required=True, help="Directory for this run")
     parser.add_argument("--provider-extraction", help="Extraction provider")
     parser.add_argument("--extractor-model", help="Extraction model")
@@ -20,7 +28,8 @@ def main():
     parser.add_argument("--judge-provider", help="Judge provider")
     parser.add_argument("--judge-model", help="Judge model")
     parser.add_argument("--judge-temperature", type=float, help="Judge temperature")
-    parser.add_argument("--literature-grounding", action="store_true", help="Enable literature grounding enhancement")
+    parser.add_argument("--literature-grounding", action="store_true",
+                        help="Enable literature grounding enhancement (default: DISABLED)")
     args = parser.parse_args()
     
     print("=" * 80)

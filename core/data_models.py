@@ -93,6 +93,7 @@ class RelatedPaperMetadata(BaseModel):
     open_access_pdf: Optional[str] = None
     key_findings: List[str] = []  # Extracted by LLM
     relevance_score: float = 0.0  # Similarity to target paper
+    source: Optional[str] = None  # Source: semantic_scholar, arxiv, world_bank
 
 class BaselineReference(BaseModel):
     """Output from Librarian agent - baseline literature for comparison."""

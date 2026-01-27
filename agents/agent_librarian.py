@@ -13,6 +13,7 @@ from core.data_models import Paper, BaselineReference, RelatedPaperMetadata
 from core.config_loader import Config
 from core.literature_searcher import LiteratureSearcher, SearchConfig
 from core.world_bank_searcher import WorldBankSearcher, WorldBankSearchConfig
+from core.arxiv_searcher import ArxivSearcher, ArxivSearchConfig
 from core.llm_wrapper import call_llm
 from utilities.helpers import load_yaml_config
 
@@ -150,6 +151,8 @@ def _get_active_sources(
     sources:
       semantic_scholar:
         enabled: true
+      arxiv:
+        enabled: false
       world_bank:
         enabled: false
 
@@ -165,6 +168,10 @@ def _get_active_sources(
     # Check Semantic Scholar
     if sources_config.get("semantic_scholar", {}).get("enabled", True):
         active.append("semantic_scholar")
+
+    # Check Arxiv
+    if sources_config.get("arxiv", {}).get("enabled", False):
+        active.append("arxiv")
 
     # Check World Bank
     if sources_config.get("world_bank", {}).get("enabled", False):
@@ -195,12 +202,149 @@ def _deduplicate_papers(
     return deduped
 
 
+def _calculate_relevance_score(
+    paper: RelatedPaperMetadata,
+    keywords: List[str],
+    current_year: int
+) -> float:
+    """
+    Calculate relevance score for papers without citation counts.
+
+    Combines:
+    - Keyword matching in title/abstract
+    - Recency (newer papers score higher)
+    - Venue quality (if available)
+
+    Args:
+        paper: The paper to score
+        keywords: Search keywords
+        current_year: Current year for recency calculation
+
+    Returns:
+        Relevance score between 0 and 1
+    """
+    score = 0.0
+    title_lower = (paper.title or "").lower()
+    abstract_lower = (paper.abstract or "").lower()
+
+    # Keyword matching (0.5 weight)
+    keyword_matches = 0
+    for kw in keywords[:5]:
+        kw_lower = kw.lower()
+        if kw_lower in title_lower:
+            keyword_matches += 2  # Title match worth more
+        elif kw_lower in abstract_lower:
+            keyword_matches += 1
+
+    max_possible_matches = len(keywords[:5]) * 2
+    keyword_score = keyword_matches / max(max_possible_matches, 1)
+    score += keyword_score * 0.5
+
+    # Recency score (0.3 weight) - newer is better
+    if paper.year:
+        years_old = current_year - paper.year
+        # Papers < 1 year: 1.0, 5 years: 0.5, 10+ years: 0.1
+        recency_score = max(0.1, 1.0 - (years_old / 10.0))
+        score += recency_score * 0.3
+
+    # Venue quality (0.2 weight) - top conferences/journals
+    venue_indicators = [
+        "advances in", "proceedings of", "journal of", "transactions on",
+        "nature", "science", "cell", "acm", "ieee", "neurips", "icml",
+        "acl", "emnlp", "aaai", "ijcai"
+    ]
+    venue_score = 0.0
+    if paper.venue:
+        venue_lower = paper.venue.lower()
+        for indicator in venue_indicators:
+            if indicator in venue_lower:
+                venue_score = 0.5
+                break
+    score += venue_score * 0.2
+
+    return min(score, 1.0)
+
+
+def _allocate_papers_by_source(
+    papers: List[RelatedPaperMetadata],
+    baseline_count: int,
+    current_year: int
+) -> List[RelatedPaperMetadata]:
+    """
+    Allocate papers from each source based on quota system.
+
+    Uses sequential allocation: each source takes its quota plus any unused slots
+    from previous sources. Ensures we always reach baseline_count.
+
+    Args:
+        papers: All papers found from all sources
+        baseline_count: Total number of papers needed
+        current_year: Current year for relevance scoring
+
+    Returns:
+        Selected papers respecting source quotas
+    """
+    # Group papers by source
+    papers_by_source: Dict[str, List[RelatedPaperMetadata]] = {}
+    for paper in papers:
+        source = paper.source or "unknown"
+        if source not in papers_by_source:
+            papers_by_source[source] = []
+        papers_by_source[source].append(paper)
+
+    num_sources = len(papers_by_source)
+    if num_sources == 0:
+        return []
+
+    # Calculate quota per source
+    quota_per_source = max(1, baseline_count // num_sources)
+
+    # Assign relevance scores to all papers without citation counts
+    for source_papers in papers_by_source.values():
+        for paper in source_papers:
+            if paper.citation_count is None and paper.relevance_score == 0.0:
+                paper.relevance_score = _calculate_relevance_score(paper, [], current_year)
+
+    # Sort function for papers within each source
+    def sort_key(p: RelatedPaperMetadata) -> tuple:
+        has_citations = p.citation_count is not None and p.citation_count > 0
+        return (
+            not has_citations,  # Papers with citations sort first
+            -(p.citation_count or 0),  # Higher citations first
+            -p.relevance_score,  # Higher relevance first
+        )
+
+    # Sequential allocation: each source takes its quota plus spill-over from previous sources
+    # Spill-over = unused quota slots from sources that didn't have enough papers
+    selected_papers = []
+    unused_slots = 0  # Track how many quota slots from previous sources were unused
+
+    for source, source_papers in sorted(papers_by_source.items()):
+        sorted_papers = sorted(source_papers, key=sort_key)
+
+        # This source can take: its quota + unused slots from previous sources
+        can_take = quota_per_source + unused_slots
+        actually_takes = min(can_take, len(sorted_papers))
+
+        selected_papers.extend(sorted_papers[:actually_takes])
+
+        # Update unused slots for next source
+        # If this source couldn't take its full quota+spill-over, those slots spill over
+        unused_slots = can_take - actually_takes
+
+        # Stop if we've reached baseline_count
+        if len(selected_papers) >= baseline_count:
+            break
+
+    return selected_papers[:baseline_count]
+
+
 def _search_multiple_sources(
     keywords: List[str],
     recency_years: int,
     limit: int,
     literature_config: Dict[str, Any]
-) -> List[RelatedPaperMetadata]:
+) -> tuple[List[RelatedPaperMetadata], int]:
     """
     Search multiple literature sources and combine results.
 
@@ -211,9 +355,10 @@ def _search_multiple_sources(
         literature_config: Literature configuration
 
     Returns:
-        Combined and deduplicated list of papers
+        Tuple of (combined and deduplicated list of papers, total API calls)
     """
     all_papers = []
+    total_api_calls = 0
     active_sources = _get_active_sources(literature_config)
     print(f"[Librarian] Active sources: {', '.join(active_sources)}")
 
@@ -236,7 +381,38 @@ def _search_multiple_sources(
                 limit=limit
             )
             all_papers.extend(semantic_papers)
+            total_api_calls += searcher.get_api_call_count()
             print(f"[Librarian]   Semantic Scholar: {len(semantic_papers)} papers")
+
+    # Search Arxiv
+    if "arxiv" in active_sources:
+        arxiv_config = literature_config.get("sources", {}).get("arxiv", {})
+        if arxiv_config.get("enabled", False):
+            print("[Librarian] Searching Arxiv...")
+            arxiv_search_config = ArxivSearchConfig(
+                base_url=arxiv_config.get('base_url', "http://export.arxiv.org/api/query"),
+                timeout=arxiv_config.get('timeout', 30),
+                max_retries=arxiv_config.get('max_retries', 3),
+                min_request_interval=arxiv_config.get('min_request_interval', 3.0)
+            )
+            arxiv_searcher = ArxivSearcher(arxiv_search_config)
+
+            # Calculate date range for Arxiv
+            from datetime import datetime, timezone
+            current_year = datetime.now(timezone.utc).year
+            start_date = f"{current_year - recency_years}-01-01"
+            end_date = f"{current_year}-12-31"
+
+            arxiv_papers = arxiv_searcher.search_by_keywords(
+                keywords=keywords[:5],
+                limit=limit,
+                start_date=start_date,
+                end_date=end_date,
+                categories=arxiv_config.get('categories', [])
+            )
+            all_papers.extend(arxiv_papers)
+            total_api_calls += arxiv_searcher.get_api_call_count()
+            print(f"[Librarian]   Arxiv: {len(arxiv_papers)} papers")
 
     # Search World Bank
     if "world_bank" in active_sources:
@@ -272,7 +448,7 @@ def _search_multiple_sources(
     all_papers = _deduplicate_papers(all_papers)
     print(f"[Librarian] Total after deduplication: {len(all_papers)} papers")
 
-    return all_papers
+    return all_papers, total_api_calls
 
 
 def _generate_baseline_summary(
@@ -386,7 +562,7 @@ def create_baseline_reference(
     import time as time_module
     time_module.sleep(1.0)
 
-    baseline_papers = _search_multiple_sources(
+    baseline_papers, total_api_calls = _search_multiple_sources(
         keywords=keywords,
         recency_years=recency_years,
         limit=baseline_count * 2,  # Get more to filter
@@ -398,21 +574,30 @@ def create_baseline_reference(
         # Add delay before retry
         time_module.sleep(2.0)
         # Try with just the first few keywords and broader year range
-        baseline_papers = _search_multiple_sources(
+        baseline_papers, retry_api_calls = _search_multiple_sources(
             keywords=keywords[:3],
             recency_years=recency_years + 2,
             limit=baseline_count,
             literature_config=literature_config
         )
+        total_api_calls += retry_api_calls
 
-    # Sort by citation count and take top N
-    baseline_papers = sorted(
-        baseline_papers,
-        key=lambda p: p.citation_count or 0,
-        reverse=True
-    )[:baseline_count]
+    # Allocate papers by source with quota system
+    from datetime import datetime, timezone
+    current_year = datetime.now(timezone.utc).year
+    baseline_papers = _allocate_papers_by_source(
+        papers=baseline_papers,
+        baseline_count=baseline_count,
+        current_year=current_year
+    )
 
-    print(f"[Librarian]   Found {len(baseline_papers)} baseline papers")
+    # Print source breakdown
+    source_counts = {}
+    for p in baseline_papers:
+        src = p.source or "unknown"
+        source_counts[src] = source_counts.get(src, 0) + 1
+    source_summary = ", ".join([f"{src}:{count}" for src, count in source_counts.items()])
+    print(f"[Librarian]   Found {len(baseline_papers)} baseline papers ({source_summary})")
 
     # Step 3: Extract key findings from baseline papers
     if librarian_config.get('extract_key_findings', True):
@@ -433,10 +618,10 @@ def create_baseline_reference(
         query_keywords=keywords[:8],
         baseline_papers=baseline_papers,
         key_findings_summary=summary,
-        total_api_calls=searcher.get_api_call_count()
+        total_api_calls=total_api_calls
     )
 
-    print(f"[Librarian] Baseline reference created with {searcher.get_api_call_count()} API calls")
+    print(f"[Librarian] Baseline reference created with {len(baseline_ref.baseline_papers)} papers, {total_api_calls} API calls")
 
     return baseline_ref
 
