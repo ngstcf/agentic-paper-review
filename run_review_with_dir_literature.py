@@ -322,7 +322,12 @@ def enhance_review_with_literature(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the academic review system with literature-grounding enhancement")
+    parser = argparse.ArgumentParser(
+        description="Run the academic review system (standard or literature-grounded)\n\n"
+                    "Default: Standard review mode (no literature grounding)\n"
+                    "Use --literature-grounding to enable literature enhancement (Librarian → Reader → Fact-Checker → Enhanced Synthesis)",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--run-dir", required=True, help="Directory for this run")
     parser.add_argument("--override-config", help="Path to a config file to override the default")
     parser.add_argument("--force-reload", action="store_true", help="Force reload of configuration")
