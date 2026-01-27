@@ -428,9 +428,9 @@
                 <li>Score each one against criteria *you* define (like "Empirical Rigor" or "Originality").</li>
                 <li>Provide a detailed written review with direct quotes to back up its scores.</li>
                 <li>Generate a single spreadsheet (CSV) so you can sort all papers from best to worst.</li>
-                <li><strong>NEW:</strong> Automatically search for and analyze related papers to verify novelty claims (optional).</li>
-                <li><strong>NEW:</strong> Position each paper within the research trajectory and identify missing citations.</li>
-                <li>Automatically compare runs from different AI models and have an "AI Judge" review any disagreements.</li>
+                <li><strong>NEW (Optional):</strong> Search for related papers to establish baseline literature (quality depends on search results).</li>
+                <li><strong>NEW (Optional):</strong> Position each paper within the research trajectory with novelty-adjusted scoring.</li>
+                <li>(Optional) Compare runs from different AI models and have an "AI Judge" review any disagreements.</li>
                 <li>Handle interruptions gracefully and resume from where it left off.</li>
                 <li>Allow you to experiment with different LLM providers for different tasks.</li>
             </ul>
@@ -696,9 +696,10 @@ JUDGE_MODEL=gemini-2.5-pro
 
             <h3>Key Benefits</h3>
             <ul>
-                <li><strong>Novelty Verification:</strong> Automatically checks if claims of being "first" or "novel" are justified</li>
-                <li><strong>Citation Gap Detection:</strong> Identifies missing prior work that should be cited</li>
+                <li><strong>Baseline Literature Context:</strong> Establishes what's known in the research area by finding relevant papers</li>
+                <li><strong>Novelty Rankings:</strong> Per-criterion novelty assessment (1-5 scale) comparing the paper against baseline literature</li>
                 <li><strong>Research Trajectory:</strong> Shows where the paper fits in the evolution of the field</li>
+                <li><strong>Fact-Checking:</strong> Verifies suspicious claims like "first study" when detected</li>
                 <li><strong>Novelty-Adjusted Scoring:</strong> Adjusts scores based on actual contribution vs. prior work</li>
             </ul>
 
@@ -794,6 +795,18 @@ python run_review_with_dir_literature.py \\
 
             <div class="note">
                 <strong>Source Priority:</strong> When multiple sources are enabled, papers are sorted by citation count. Semantic Scholar papers (with citations) rank above World Bank papers (without citations).
+            </div>
+
+            <div class="warning">
+                <strong>Important: Literature Quality Depends on Search Results</strong>
+                <p>The literature grounding feature is <strong>optional</strong> and its quality depends on the literature search results:</p>
+                <ul>
+                    <li><strong>Search Quality:</strong> The Librarian agent searches for relevant papers, but quality varies by field. Well-established fields (e.g., development economics) yield better results than niche or emerging topics.</li>
+                    <li><strong>No Results Found:</strong> If the Librarian cannot find relevant papers, the baseline reference will be empty or low-quality, reducing the value of novelty assessment and research trajectory analysis.</li>
+                    <li><strong>Manual Baseline:</strong> For critical reviews, consider manually providing baseline papers in the <code>literature/</code> directory to ensure high-quality comparison.</li>
+                    <li><strong>Verification Limits:</strong> Fact-checking only verifies specific suspicious claims (e.g., "first study"). It does not comprehensively verify all claims in the paper.</li>
+                </ul>
+                <p><strong>Recommendation:</strong> Test literature grounding with a small sample first to assess search quality for your field before running on large batches.</p>
             </div>
 
             <h3>Literature-Grounded Output</h3>
