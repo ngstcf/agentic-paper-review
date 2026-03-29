@@ -44,3 +44,9 @@ compare_reports.py
 # Temporary setup scripts
 setup_batch_runs.py
 fetch_arxiv_papers.py
+
+0_Specs_final.md
+0_Specs.md
+
+# Archives
+archive/
