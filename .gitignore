@@ -45,8 +45,13 @@ compare_reports.py
 setup_batch_runs.py
 fetch_arxiv_papers.py
 
+0_Readme.md
 0_Specs_final.md
 0_Specs.md
+
+# Test caches
+test_literature_enhanced/
+test_literature_run/
 
 # Archives
 archive/
