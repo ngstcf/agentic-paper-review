@@ -63,6 +63,21 @@ def mock_config():
         'temperature': 0.5,
         'max_retries': 2
     }
+    config.get_agent_config.return_value = {
+        'critic_temperature': 0.6,
+        'critic_max_json_retries': 3,
+        'librarian_temperature': 0.3,
+        'librarian_summary_temperature': 0.5,
+        'fact_checker_temperature': 0.3,
+        'librarian_pre_search_delay': 1.0,
+        'librarian_retry_delay': 2.0,
+        'fact_checker_max_retries': 2,
+    }
+    config.get_novelty_config.return_value = {
+        'base_factor': 0.025,
+        'contradiction_penalty': 0.05,
+        'extension_bonus': 0.03,
+    }
     config.get_prompt.return_value = "Prompt: {paper_title}"
     return config
 

@@ -116,7 +116,7 @@ def extract_criterion_evidence(
     system_prompt = config.get_prompt("extractor_system").format(domain=config.domain)
 
     # Build standard prompt
-    max_content_tokens = 100000
+    max_content_tokens = config.get_system_config()['max_content_tokens']
     paper_content = paper.content_markdown
     if len(paper_content) > max_content_tokens * 4:
         print(f"[Reader Warning] Truncating paper content for {criterion['id']}")

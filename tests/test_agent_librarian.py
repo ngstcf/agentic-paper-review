@@ -51,6 +51,22 @@ def mock_config():
         'temperature': 0.3,
         'max_retries': 2
     }
+    config.get_agent_config.return_value = {
+        'librarian_temperature': 0.3,
+        'librarian_summary_temperature': 0.5,
+        'fact_checker_temperature': 0.3,
+        'critic_temperature': 0.6,
+        'librarian_pre_search_delay': 1.0,
+        'librarian_retry_delay': 2.0,
+        'critic_max_json_retries': 3,
+        'fact_checker_max_retries': 2,
+    }
+    config.get_system_config.return_value = {
+        'max_content_tokens': 100000,
+        'batch_max_workers': 4,
+        'cost_warning_per_paper': 1.0,
+        'arxiv_min_request_interval': 3.0,
+    }
     config.get_prompt.return_value = "Test prompt"
     return config
 

@@ -78,7 +78,7 @@ def _call_custom_ollama_bypass(
             headers=headers,
             json=payload,
             verify=False,  # Disable SSL verification
-            timeout=300
+            timeout=int(os.environ.get("LLM_TIMEOUT", 300))
         )
         
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
@@ -112,7 +112,8 @@ def call_llm(
     model: str,
     temperature: float,
     max_retries: int,
-    response_format: Optional[str] = None
+    response_format: Optional[str] = None,
+    config: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Unified LLM API call with retry logic, cost calculation,
@@ -152,20 +153,33 @@ def call_llm(
 
     # Set token limits based on model capabilities
     # Must check more specific models first (gpt-4o before gpt-4)
-    if "gpt-4o" in model_lower:
-        max_tokens_limit = 16384  # gpt-4o and gpt-4o-mini support 16k
-    elif "gpt-4" in model_lower:
-        max_tokens_limit = 4096  # gpt-4 and gpt-4-turbo support 4k
-    elif "reasoner" in model_lower:
-        max_tokens_limit = 32768  # deepseek-reasoner supports up to 128k
-    elif "gemini-2.5" in model_lower:
-        max_tokens_limit = 32768  # gemini 2.5 supports high output
+    if config is not None:
+        token_limits = config.get_token_limits()
+        if "gpt-4o" in model_lower:
+            max_tokens_limit = token_limits["gpt4o"]
+        elif "gpt-4" in model_lower:
+            max_tokens_limit = token_limits["gpt4"]
+        elif "reasoner" in model_lower:
+            max_tokens_limit = token_limits["reasoner"]
+        elif "gemini-2.5" in model_lower:
+            max_tokens_limit = token_limits["gemini"]
+        else:
+            max_tokens_limit = token_limits["default"]
     else:
-        max_tokens_limit = 8192  # Standard limit for other models
+        if "gpt-4o" in model_lower:
+            max_tokens_limit = 16384  # gpt-4o and gpt-4o-mini support 16k
+        elif "gpt-4" in model_lower:
+            max_tokens_limit = 4096  # gpt-4 and gpt-4-turbo support 4k
+        elif "reasoner" in model_lower:
+            max_tokens_limit = 32768  # deepseek-reasoner supports up to 128k
+        elif "gemini-2.5" in model_lower:
+            max_tokens_limit = 32768  # gemini 2.5 supports high output
+        else:
+            max_tokens_limit = 8192  # Standard limit for other models
 
     params = {
         "num_retries": max_retries,
-        "timeout": 300,  # Increased timeout for longer responses (5 minutes)
+        "timeout": config.get_timeout_config()["llm_timeout"] if config is not None else 300,
         "temperature": temperature,
         "max_tokens": max_tokens_limit
     }

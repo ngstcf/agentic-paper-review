@@ -79,6 +79,12 @@ librarian:
   # Number of baseline papers to retrieve
   baseline_papers_count: 6
 
+  # Relevance scoring weights for papers without citation counts
+  relevance_weights:
+    keyword: 0.5
+    recency: 0.3
+    venue: 0.2
+
   # Minimum citation count for baseline papers
   citation_count_min: 10
 
@@ -171,6 +177,12 @@ fact_checker:
 critic:
   # Include research trajectory section in review
   include_research_trajectory: true
+
+  # Novelty adjustment factors for score calculation
+  novelty_adjustment:
+    base_factor: 0.025
+    contradiction_penalty: 0.05
+    extension_bonus: 0.03
 
   # Research trajectory section template
   trajectory_template: |

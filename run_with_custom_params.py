@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--judge-temperature", type=float, help="Judge temperature")
     parser.add_argument("--literature-grounding", action="store_true",
                         help="Enable literature grounding enhancement (default: DISABLED)")
+    parser.add_argument("--web", action="store_true",
+                        help="Enable web dashboard SSE backend")
     args = parser.parse_args()
     
     print("=" * 80)
@@ -234,6 +236,8 @@ def main():
     cmd = ["python", script_name, "--run-dir", args.run_dir]
     if args.literature_grounding:
         cmd.append("--literature-grounding")
+    if args.web:
+        cmd.append("--web")
 
     # Set environment variables for this run
     env = os.environ.copy()

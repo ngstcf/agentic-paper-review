@@ -24,6 +24,11 @@ from agents.agent_synthesizer import synthesize_review
 from utilities.output_generator import save_review_markdown, save_consolidated_csv
 from utilities.helpers import setup_logging, get_config_hash
 from core.data_models import Review
+from core.progress import (
+    get_emitter, configure_emitter, SSEBackend,
+    RunStarted, StageStarted, StageCompleted,
+    PaperCompleted, RunProgress, CostUpdate, RunCompleted
+)
 
 def print_progress_bar(current, total, prefix="", suffix="", length=50):
     """Print a progress bar to the console."""
@@ -145,10 +150,17 @@ def main():
     parser.add_argument("--run-dir", required=True, help="Directory for this run")
     parser.add_argument("--override-config", help="Path to a config file to override the default") # Typo 1 fixed
     parser.add_argument("--force-reload", action="store_true", help="Force reload of configuration")
+    parser.add_argument("--web", action="store_true", help="Enable web dashboard SSE backend")
     args = parser.parse_args()
     
     start_time = time.time()
     setup_logging()
+
+    # Configure progress emitter with optional SSE backend
+    if args.web:
+        emitter = configure_emitter(use_sse=True)
+    else:
+        emitter = get_emitter()
     
     print("=" * 80, flush=True)  
     print("🚀 Starting Academic Review System with Run Directory", flush=True)  
@@ -225,6 +237,14 @@ def main():
 
     print(f"\n[Ingest] ✅ Ingestion completed in {ingest_time:.1f} seconds", flush=True)
     print(f"[Ingest] 📄 Loaded {len(papers)} papers for processing.", flush=True)
+
+    # Emit RunStarted event
+    emitter.emit(RunStarted(
+        run_dir=dirs['run_dir'],
+        mode="standard",
+        paper_count=len(papers),
+        config=llm_config
+    ))
     
     # 6. Load progress to resume from where we left off
     progress_data = load_progress(dirs["progress_file"], config_hash)
@@ -269,18 +289,22 @@ def main():
         
         # 8. Agent 1: Extract Evidence (Parallel)
         print(f"   🔍 [Agent 1] Starting evidence extraction...", flush=True)
+        emitter.emit(StageStarted(stage_name="extraction", paper_filename=paper.filename))
         extraction_start = time.time()
         extractions = process_paper_extractions(paper, config)
         extraction_time = time.time() - extraction_start
-        
+
         if not extractions:
             print(f"   ❌ [Agent 1] Failed to get any extractions for {paper.filename}. Skipping.", flush=True)
             continue
-        
+
         print(f"   ✅ [Agent 1] Completed {len(extractions)} extractions in {extraction_time:.1f}s", flush=True)
-        
+        emitter.emit(StageCompleted(stage_name="extraction", duration_s=extraction_time,
+                                     result_summary=f"{len(extractions)} extractions"))
+
         # 9. Agent 2: Synthesize Review
         print(f"   📝 [Agent 2] Starting review synthesis...")
+        emitter.emit(StageStarted(stage_name="synthesis", paper_filename=paper.filename))
         synthesis_start = time.time()
         review = synthesize_review(paper, extractions, config)
         synthesis_time = time.time() - synthesis_start
@@ -290,6 +314,8 @@ def main():
             continue
         
         print(f"   ✅ [Agent 2] Completed synthesis in {synthesis_time:.1f}s", flush=True)
+        emitter.emit(StageCompleted(stage_name="synthesis", duration_s=synthesis_time,
+                                     result_summary=f"score={review.overall_score:.1f}"))
         
         # 10. Save Individual Output
         print(f"   💾 [Output] Saving review...", flush=True)
@@ -314,6 +340,24 @@ def main():
         paper_total_time = paper_end_time - paper_start_time
         
         processed_count += 1
+
+        # Emit progress events
+        emitter.emit(PaperCompleted(
+            paper_filename=paper.filename,
+            score=review.overall_score,
+            recommendation=review.recommendation,
+            cost=paper_cost,
+            duration_s=paper_total_time
+        ))
+        emitter.emit(CostUpdate(paper_cost=paper_cost, total_cost=total_batch_cost))
+        elapsed = time.time() - start_time
+        done = completed_count + processed_count
+        remaining = len(papers) - done
+        est_remaining = (elapsed / done * remaining) if done > 0 else 0
+        emitter.emit(RunProgress(
+            papers_done=done, papers_total=len(papers),
+            elapsed_s=elapsed, estimated_remaining_s=est_remaining
+        ))
         
         # Print summary for this paper
         print(f"   📊 [Summary] Score: {review.overall_score:.1f}/100, Recommendation: {review.recommendation}", flush=True)
@@ -350,9 +394,10 @@ def main():
         print(f"   📈 {completed_count} papers from cache, {processed_count} newly processed", flush=True)
     
     # Cost validation
+    cost_warning_threshold = float(os.environ.get("COST_WARNING_PER_PAPER", 1.0))
     if new_processing_cost > 0 and processed_count > 0:
         avg_cost_per_paper = new_processing_cost / processed_count
-        if avg_cost_per_paper > 1.0:  # Arbitrary threshold
+        if avg_cost_per_paper > cost_warning_threshold:
             print(f"\n⚠️  [Warning] High average cost per paper: ${avg_cost_per_paper:.4f}", flush=True)
             print(f"   Consider using cheaper models for extraction to reduce costs", flush=True)
     
@@ -361,6 +406,14 @@ def main():
         print(f"📈 [Summary] Average time per paper: {total_time/len(papers):.1f} seconds", flush=True)
     print(f"📁 [Summary] Results saved in: {dirs['outputs_dir']}", flush=True)
     print("=" * 80, flush=True)
+
+    # Emit RunCompleted event
+    emitter.emit(RunCompleted(
+        total_papers=len(final_reviews),
+        total_cost=total_batch_cost,
+        total_time_s=total_time,
+        output_dir=dirs['outputs_dir']
+    ))
 
 if __name__ == "__main__":
     main()

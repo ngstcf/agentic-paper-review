@@ -96,3 +96,57 @@ class Config:
             "judge_model": self.get_env("JUDGE_MODEL", "deepseek-reasoner"),
             "judge_temperature": self.get_env("JUDGE_TEMPERATURE",0.1)
         }
+
+    def get_agent_config(self) -> Dict[str, Any]:
+        """Return agent-specific temperatures and retry settings from env."""
+        return {
+            "librarian_temperature": float(self.get_env("LIBRARIAN_TEMPERATURE", 0.3)),
+            "librarian_summary_temperature": float(self.get_env("LIBRARIAN_SUMMARY_TEMPERATURE", 0.5)),
+            "fact_checker_temperature": float(self.get_env("FACT_CHECKER_TEMPERATURE", 0.3)),
+            "critic_temperature": float(self.get_env("CRITIC_TEMPERATURE", 0.6)),
+            "librarian_pre_search_delay": float(self.get_env("LIBRARIAN_PRE_SEARCH_DELAY", 1.0)),
+            "librarian_retry_delay": float(self.get_env("LIBRARIAN_RETRY_DELAY", 2.0)),
+            "critic_max_json_retries": int(self.get_env("CRITIC_MAX_JSON_RETRIES", 3)),
+            "fact_checker_max_retries": int(self.get_env("FACT_CHECKER_MAX_RETRIES", 2)),
+        }
+
+    def get_token_limits(self) -> Dict[str, int]:
+        """Return model-specific token limits from env."""
+        return {
+            "gpt4o": int(self.get_env("TOKEN_LIMIT_GPT4O", 16384)),
+            "gpt4": int(self.get_env("TOKEN_LIMIT_GPT4", 4096)),
+            "reasoner": int(self.get_env("TOKEN_LIMIT_REASONER", 32768)),
+            "gemini": int(self.get_env("TOKEN_LIMIT_GEMINI", 32768)),
+            "default": int(self.get_env("TOKEN_LIMIT_DEFAULT", 8192)),
+            "custom_openai": int(self.get_env("TOKEN_LIMIT_CUSTOM_OPENAI", 16384)),
+        }
+
+    def get_timeout_config(self) -> Dict[str, Any]:
+        """Return LLM/API timeout settings from env."""
+        return {
+            "llm_timeout": int(self.get_env("LLM_TIMEOUT", 300)),
+            "api_timeout": int(self.get_env("API_TIMEOUT", 30)),
+        }
+
+    def get_novelty_config(self) -> Dict[str, Any]:
+        """Return novelty adjustment factors from literature_sources.yaml."""
+        lit_config = self._load_yaml(
+            os.path.join(self.config_path, "..", "literature_sources.yaml")
+        ) if os.path.exists(os.path.join(self.config_path, "..", "literature_sources.yaml")) else {}
+
+        critic_config = lit_config.get("critic", {})
+        novelty_adj = critic_config.get("novelty_adjustment", {})
+        return {
+            "base_factor": float(novelty_adj.get("base_factor", 0.025)),
+            "contradiction_penalty": float(novelty_adj.get("contradiction_penalty", 0.05)),
+            "extension_bonus": float(novelty_adj.get("extension_bonus", 0.03)),
+        }
+
+    def get_system_config(self) -> Dict[str, Any]:
+        """Return system-wide limits and batch settings from env."""
+        return {
+            "max_content_tokens": int(self.get_env("MAX_CONTENT_TOKENS", 100000)),
+            "batch_max_workers": int(self.get_env("BATCH_MAX_WORKERS", 4)),
+            "cost_warning_per_paper": float(self.get_env("COST_WARNING_PER_PAPER", 1.0)),
+            "arxiv_min_request_interval": float(self.get_env("ARXIV_MIN_REQUEST_INTERVAL", 3.0)),
+        }

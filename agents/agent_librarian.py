@@ -60,7 +60,7 @@ Return your answer as a JSON object:
         system_prompt="You are an expert academic librarian who specializes in identifying research sub-topics and generating effective search queries.",
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
-        temperature=0.3,  # Lower temperature for consistent keyword extraction
+        temperature=config.get_agent_config()['librarian_temperature'],
         max_retries=config.get_llm_config()['max_retries']
     )
 
@@ -124,7 +124,7 @@ Return your answer as a JSON object:
         system_prompt="You are an expert at identifying the core contributions of academic papers.",
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
-        temperature=0.3,
+        temperature=config.get_agent_config()['librarian_temperature'],
         max_retries=config.get_llm_config()['max_retries']
     )
 
@@ -205,7 +205,8 @@ def _deduplicate_papers(
 def _calculate_relevance_score(
     paper: RelatedPaperMetadata,
     keywords: List[str],
-    current_year: int
+    current_year: int,
+    weights: Optional[Dict[str, float]] = None
 ) -> float:
     """
     Calculate relevance score for papers without citation counts.
@@ -219,15 +220,19 @@ def _calculate_relevance_score(
         paper: The paper to score
         keywords: Search keywords
         current_year: Current year for recency calculation
+        weights: Optional dict with 'keyword', 'recency', 'venue' weights
 
     Returns:
         Relevance score between 0 and 1
     """
+    if weights is None:
+        weights = {"keyword": 0.5, "recency": 0.3, "venue": 0.2}
+
     score = 0.0
     title_lower = (paper.title or "").lower()
     abstract_lower = (paper.abstract or "").lower()
 
-    # Keyword matching (0.5 weight)
+    # Keyword matching
     keyword_matches = 0
     for kw in keywords[:5]:
         kw_lower = kw.lower()
@@ -238,16 +243,16 @@ def _calculate_relevance_score(
 
     max_possible_matches = len(keywords[:5]) * 2
     keyword_score = keyword_matches / max(max_possible_matches, 1)
-    score += keyword_score * 0.5
+    score += keyword_score * weights.get("keyword", 0.5)
 
-    # Recency score (0.3 weight) - newer is better
+    # Recency score - newer is better
     if paper.year:
         years_old = current_year - paper.year
         # Papers < 1 year: 1.0, 5 years: 0.5, 10+ years: 0.1
         recency_score = max(0.1, 1.0 - (years_old / 10.0))
-        score += recency_score * 0.3
+        score += recency_score * weights.get("recency", 0.3)
 
-    # Venue quality (0.2 weight) - top conferences/journals
+    # Venue quality - top conferences/journals
     venue_indicators = [
         "advances in", "proceedings of", "journal of", "transactions on",
         "nature", "science", "cell", "acm", "ieee", "neurips", "icml",
@@ -260,7 +265,7 @@ def _calculate_relevance_score(
             if indicator in venue_lower:
                 venue_score = 0.5
                 break
-    score += venue_score * 0.2
+    score += venue_score * weights.get("venue", 0.2)
 
     return min(score, 1.0)
 
@@ -501,7 +506,7 @@ This summary will help readers understand where new papers fit in the research t
         system_prompt="You are an expert at synthesizing academic literature and identifying research trends.",
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
-        temperature=0.5,
+        temperature=config.get_agent_config()['librarian_summary_temperature'],
         max_retries=config.get_llm_config()['max_retries']
     )
 
@@ -560,7 +565,7 @@ def create_baseline_reference(
 
     # Add delay before search to avoid rate limits
     import time as time_module
-    time_module.sleep(1.0)
+    time_module.sleep(config.get_agent_config()['librarian_pre_search_delay'])
 
     baseline_papers, total_api_calls = _search_multiple_sources(
         keywords=keywords,
@@ -572,7 +577,7 @@ def create_baseline_reference(
     if not baseline_papers:
         print("[Librarian] Warning: No baseline papers found. Using broader search...")
         # Add delay before retry
-        time_module.sleep(2.0)
+        time_module.sleep(config.get_agent_config()['librarian_retry_delay'])
         # Try with just the first few keywords and broader year range
         baseline_papers, retry_api_calls = _search_multiple_sources(
             keywords=keywords[:3],

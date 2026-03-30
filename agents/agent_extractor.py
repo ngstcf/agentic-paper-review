@@ -12,12 +12,12 @@ def build_extraction_prompt(
     paper_content: str,
     criterion: Dict[str, Any],
     domain: str,
-    prompt_template: str
+    prompt_template: str,
+    max_content_tokens: int = 100000
 ) -> str:
     """Builds the user prompt for Agent 1."""
-    
+
     # Truncate paper content if it's too large to fit in the prompt
-    max_content_tokens = 100000  # ~100k tokens
     if len(paper_content) > max_content_tokens * 4:
         print(f"[Warning] Truncating paper content for {criterion['id']}")
         paper_content = paper_content[:max_content_tokens * 4]
@@ -42,12 +42,15 @@ def extract_criterion_evidence(
     llm_config = config.get_llm_config()
     prompt_template = config.get_prompt("extractor_user")
     system_prompt = config.get_prompt("extractor_system").format(domain=config.domain)
-    
+
+    max_content_tokens = config.get_system_config()['max_content_tokens']
+
     prompt = build_extraction_prompt(
         paper_content=paper.content_markdown,
         criterion=criterion,
         domain=config.domain,
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        max_content_tokens=max_content_tokens
     )
     
     response = call_llm(

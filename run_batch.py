@@ -58,7 +58,7 @@ def run_single_directory(run_dir):
 def main():
     parser = argparse.ArgumentParser(description="Run batch review process")
     parser.add_argument("--parallel", action="store_true", help="Run directories in parallel")
-    parser.add_argument("--max-workers", type=int, default=4, help="Maximum number of parallel workers")
+    parser.add_argument("--max-workers", type=int, default=int(os.environ.get("BATCH_MAX_WORKERS", 4)), help="Maximum number of parallel workers")
     args = parser.parse_args()
     
     # List of run directories

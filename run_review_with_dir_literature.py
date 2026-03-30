@@ -23,8 +23,13 @@ from core.paper_ingestor import (
 from agents.agent_extractor import process_paper_extractions
 from agents.agent_synthesizer import synthesize_review
 from utilities.output_generator import save_review_markdown, save_consolidated_csv
-from utilities.helpers import setup_logging, get_config_hash, load_yaml_config
+from utilities.helpers import setup_logging, get_config_hash, load_yaml_config, calculate_novelty_adjusted_score
 from core.data_models import Review, GroundedReview, BaselineReference, FactCheckResult
+from core.progress import (
+    get_emitter, configure_emitter, SSEBackend,
+    RunStarted, StageStarted, StageCompleted,
+    PaperCompleted, RunProgress, CostUpdate, RunCompleted
+)
 
 # Literature grounding imports
 _literature_agents_available = True
@@ -160,6 +165,9 @@ def _calculate_novelty_adjusted_score(
     """
     Calculate novelty-adjusted score based on extraction novelty rankings.
 
+    Delegates to the shared calculate_novelty_adjusted_score from helpers,
+    using novelty config from the Config object if available.
+
     Args:
         base_score: The base calculated score
         extractions: List of novelty-ranked extractions (or standard extractions)
@@ -173,28 +181,24 @@ def _calculate_novelty_adjusted_score(
         # Standard extractions without novelty rankings - no adjustment
         return base_score
 
-    # Calculate average novelty ranking
-    novelty_scores = [e.novelty_ranking for e in extractions]
-    avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
+    # Get novelty adjustment factors from config if available
+    try:
+        novelty_config = config.get_novelty_config()
+        base_factor = novelty_config.get("base_factor", 0.025)
+        contradiction_penalty = novelty_config.get("contradiction_penalty", 0.05)
+        extension_bonus = novelty_config.get("extension_bonus", 0.03)
+    except (AttributeError, Exception):
+        base_factor = 0.025
+        contradiction_penalty = 0.05
+        extension_bonus = 0.03
 
-    # Novelty adjustment factor (1-5 scale maps to -5% to +5% adjustment)
-    adjustment_factor = (avg_novelty - 3) * 0.025
-
-    # Check for contradictions (penalty)
-    has_contradictions = any(getattr(e, 'contradicts_baseline', False) for e in extractions)
-    if has_contradictions:
-        adjustment_factor -= 0.05  # Additional 5% penalty
-
-    # Check for significant extensions (bonus)
-    has_extensions = any(getattr(e, 'extends_baseline', False) for e in extractions)
-    if has_extensions:
-        adjustment_factor += 0.03  # Additional 3% bonus
-
-    # Apply adjustment
-    adjusted_score = base_score * (1 + adjustment_factor)
-
-    # Clamp to valid range
-    return max(0, min(100, adjusted_score))
+    return calculate_novelty_adjusted_score(
+        base_score=base_score,
+        extractions=extractions,
+        base_factor=base_factor,
+        contradiction_penalty=contradiction_penalty,
+        extension_bonus=extension_bonus
+    )
 
 
 def enhance_review_with_literature(
@@ -336,10 +340,17 @@ def main():
     parser.add_argument("--literature-grounding", action="store_true",
                         help="Enable literature grounding enhancement (default: DISABLED). "
                              "Add this flag to enable: Librarian → Reader → Fact-Checker → Enhanced Synthesis")
+    parser.add_argument("--web", action="store_true", help="Enable web dashboard SSE backend")
     args = parser.parse_args()
     
     start_time = time.time()
     setup_logging()
+
+    # Configure progress emitter with optional SSE backend
+    if args.web:
+        emitter = configure_emitter(use_sse=True)
+    else:
+        emitter = get_emitter()
     
     print("=" * 80, flush=True)  
     print("🚀 Starting Academic Review System with Run Directory", flush=True)  
@@ -431,6 +442,14 @@ def main():
     print(f"\n[Ingest] ✅ Ingestion completed in {ingest_time:.1f} seconds", flush=True)
     print(f"[Ingest] 📄 Loaded {len(papers)} papers for processing.", flush=True)
 
+    # Emit RunStarted event
+    emitter.emit(RunStarted(
+        run_dir=dirs['run_dir'],
+        mode="literature-grounded" if use_literature_grounding else "standard",
+        paper_count=len(papers),
+        config=llm_config
+    ))
+
     # 5.5. Literature Grounding Enhancement (if enabled)
     literature_context = {}  # Will hold (baseline, fact_checks) per paper
     if use_literature_grounding and len(papers) > 0:
@@ -514,6 +533,7 @@ def main():
         baseline = paper_literature["baseline"]
 
         # 8. Agent 1: Extract Evidence (with or without literature enhancement)
+        emitter.emit(StageStarted(stage_name="extraction", paper_filename=paper.filename))
         if use_literature_grounding and baseline:
             print(f"   🔍 [Agent 1] Starting evidence extraction (LITERATURE-ENHANCED)...", flush=True)
             extraction_start = time.time()
@@ -542,6 +562,8 @@ def main():
             continue
 
         print(f"   ✅ [Agent 1] Completed {len(extractions)} extractions in {extraction_time:.1f}s", flush=True)
+        emitter.emit(StageCompleted(stage_name="extraction", duration_s=extraction_time,
+                                     result_summary=f"{len(extractions)} extractions"))
 
         # 8.5. Fact-Checker (if literature grounding enabled)
         fact_checks = []
@@ -571,6 +593,7 @@ def main():
                 fact_checks = []
 
         # 9. Agent 2: Synthesize Review (with or without literature enhancement)
+        emitter.emit(StageStarted(stage_name="synthesis", paper_filename=paper.filename))
         if use_literature_grounding:
             print(f"   📝 [Agent 2] Starting synthesis (LITERATURE-ENHANCED)...", flush=True)
             synthesis_start = time.time()
@@ -612,6 +635,8 @@ def main():
             continue
 
         print(f"   ✅ [Agent 2] Completed synthesis in {synthesis_time:.1f}s", flush=True)
+        emitter.emit(StageCompleted(stage_name="synthesis", duration_s=synthesis_time,
+                                     result_summary=f"score={review.overall_score:.1f}"))
 
         # 10. Save Individual Output
         print(f"   💾 [Output] Saving review...", flush=True)
@@ -653,6 +678,24 @@ def main():
         paper_total_time = paper_end_time - paper_start_time
         
         processed_count += 1
+
+        # Emit progress events
+        emitter.emit(PaperCompleted(
+            paper_filename=paper.filename,
+            score=review.overall_score,
+            recommendation=review.recommendation,
+            cost=paper_cost,
+            duration_s=paper_total_time
+        ))
+        emitter.emit(CostUpdate(paper_cost=paper_cost, total_cost=total_batch_cost))
+        elapsed = time.time() - start_time
+        done = completed_count + processed_count
+        remaining = len(papers) - done
+        est_remaining = (elapsed / done * remaining) if done > 0 else 0
+        emitter.emit(RunProgress(
+            papers_done=done, papers_total=len(papers),
+            elapsed_s=elapsed, estimated_remaining_s=est_remaining
+        ))
         
         # Print summary for this paper
         print(f"   📊 [Summary] Score: {review.overall_score:.1f}/100, Recommendation: {review.recommendation}", flush=True)
@@ -689,9 +732,10 @@ def main():
         print(f"   📈 {completed_count} papers from cache, {processed_count} newly processed", flush=True)
     
     # Cost validation
+    cost_warning_threshold = float(os.environ.get("COST_WARNING_PER_PAPER", 1.0))
     if new_processing_cost > 0 and processed_count > 0:
         avg_cost_per_paper = new_processing_cost / processed_count
-        if avg_cost_per_paper > 1.0:  # Arbitrary threshold
+        if avg_cost_per_paper > cost_warning_threshold:
             print(f"\n⚠️  [Warning] High average cost per paper: ${avg_cost_per_paper:.4f}", flush=True)
             print(f"   Consider using cheaper models for extraction to reduce costs", flush=True)
     
@@ -700,6 +744,14 @@ def main():
         print(f"📈 [Summary] Average time per paper: {total_time/len(papers):.1f} seconds", flush=True)
     print(f"📁 [Summary] Results saved in: {dirs['outputs_dir']}", flush=True)
     print("=" * 80, flush=True)
+
+    # Emit RunCompleted event
+    emitter.emit(RunCompleted(
+        total_papers=len(final_reviews),
+        total_cost=total_batch_cost,
+        total_time_s=total_time,
+        output_dir=dirs['outputs_dir']
+    ))
 
 if __name__ == "__main__":
     main()

@@ -84,3 +84,54 @@ def load_yaml_config(file_path: str) -> Dict[str, Any]:
     """
     with open(file_path, 'r') as f:
         return yaml.safe_load(f)
+
+
+def calculate_novelty_adjusted_score(
+    base_score: float,
+    extractions: list,
+    base_factor: float = 0.025,
+    contradiction_penalty: float = 0.05,
+    extension_bonus: float = 0.03
+) -> float:
+    """
+    Adjust an overall score based on novelty rankings from extractions.
+
+    Shared implementation used by both the Critic agent and the literature
+    pipeline wrapper in run_review_with_dir_literature.py.
+
+    Args:
+        base_score: The base calculated score
+        extractions: List of extraction objects with novelty_ranking,
+                     contradicts_baseline, and extends_baseline attributes
+        base_factor: Multiplier per novelty point above/below midpoint (3)
+        contradiction_penalty: Subtracted from adjustment when contradictions found
+        extension_bonus: Added to adjustment when extensions of baseline found
+
+    Returns:
+        Novelty-adjusted score clamped to [0, 100]
+    """
+    if not extractions:
+        return base_score
+
+    # Calculate average novelty ranking
+    novelty_scores = [getattr(e, 'novelty_ranking', 3) for e in extractions]
+    avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
+
+    # Novelty adjustment factor (1-5 scale maps to -X% to +X% adjustment)
+    adjustment_factor = (avg_novelty - 3) * base_factor
+
+    # Check for contradictions (penalty)
+    has_contradictions = any(getattr(e, 'contradicts_baseline', False) for e in extractions)
+    if has_contradictions:
+        adjustment_factor -= contradiction_penalty
+
+    # Check for significant extensions (bonus)
+    has_extensions = any(getattr(e, 'extends_baseline', False) for e in extractions)
+    if has_extensions:
+        adjustment_factor += extension_bonus
+
+    # Apply adjustment
+    adjusted_score = base_score * (1 + adjustment_factor)
+
+    # Clamp to valid range
+    return max(0, min(100, adjusted_score))

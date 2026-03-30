@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Review System</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1>Academic Review System</h1>
+        </div>
+        <div class="header-right">
+            <select id="run-selector" class="select-input">
+                <option value="">Select run directory...</option>
+            </select>
+            <select id="mode-selector" class="select-input">
+                <option value="standard">Standard Review</option>
+                <option value="literature">Literature-Grounded</option>
+            </select>
+            <button id="start-btn" class="btn btn-primary" disabled>Start Review</button>
+            <button id="stop-btn" class="btn btn-danger" style="display:none">Stop</button>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <!-- Left: Config Panel -->
+        <aside class="config-panel">
+            <h2>Configuration</h2>
+            <div id="config-content" class="config-content">
+                <p class="placeholder-text">Select a run directory to view config</p>
+            </div>
+            <h2>Criteria</h2>
+            <div id="criteria-content" class="config-content">
+                <p class="placeholder-text">Select a run directory to view criteria</p>
+            </div>
+        </aside>
+
+        <!-- Right: Main panels -->
+        <div class="right-panels">
+            <!-- Progress Panel -->
+            <section class="progress-panel">
+                <h2>Progress</h2>
+                <div id="progress-bar-container" class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-stats">
+                    <span id="progress-text">No active run</span>
+                    <span id="progress-eta"></span>
+                </div>
+                <div class="stage-indicators">
+                    <div class="stage-item" id="stage-ingest">
+                        <span class="stage-dot"></span>
+                        <span>Ingestion</span>
+                    </div>
+                    <div class="stage-item" id="stage-extraction">
+                        <span class="stage-dot"></span>
+                        <span>Extraction</span>
+                    </div>
+                    <div class="stage-item" id="stage-synthesis">
+                        <span class="stage-dot"></span>
+                        <span>Synthesis</span>
+                    </div>
+                    <div class="stage-item" id="stage-output">
+                        <span class="stage-dot"></span>
+                        <span>Output</span>
+                    </div>
+                </div>
+                <div class="cost-time-tracker">
+                    <div class="tracker-item">
+                        <span class="tracker-label">Cost</span>
+                        <span id="cost-display" class="tracker-value">$0.00</span>
+                    </div>
+                    <div class="tracker-item">
+                        <span class="tracker-label">Elapsed</span>
+                        <span id="elapsed-display" class="tracker-value">0s</span>
+                    </div>
+                    <div class="tracker-item">
+                        <span class="tracker-label">Current Paper</span>
+                        <span id="current-paper-display" class="tracker-value">-</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Table -->
+            <section class="results-panel">
+                <h2>Results</h2>
+                <div id="results-table-container">
+                    <table id="results-table" class="results-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="paper_filename">Paper</th>
+                                <th data-sort="overall_score">Score</th>
+                                <th data-sort="recommendation">Recommendation</th>
+                                <th data-sort="total_cost_usd">Cost</th>
+                                <th data-sort="confidence">Confidence</th>
+                                <th>Review</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-tbody">
+                        </tbody>
+                    </table>
+                    <p id="no-results" class="placeholder-text">No results yet</p>
+                </div>
+            </section>
+
+            <!-- Review Viewer Modal -->
+            <div id="review-modal" class="modal" style="display:none">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="review-modal-title">Review</h3>
+                        <button class="modal-close" id="review-modal-close">&times;</button>
+                    </div>
+                    <div id="review-modal-body" class="review-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Panel -->
+    <section class="log-panel">
+        <h2>Event Log</h2>
+        <div id="log-content" class="log-content"></div>
+    </section>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

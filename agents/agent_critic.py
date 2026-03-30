@@ -27,7 +27,7 @@ from core.data_models import (
 )
 from core.config_loader import Config
 from core.llm_wrapper import call_llm
-from utilities.helpers import get_weights_table
+from utilities.helpers import get_weights_table, calculate_novelty_adjusted_score
 
 
 def _repair_schema_mismatch(
@@ -202,6 +202,9 @@ def _calculate_novelty_adjusted_score(
     """
     Adjust the overall score based on novelty rankings.
 
+    Delegates to the shared calculate_novelty_adjusted_score from helpers,
+    using novelty config from the Config object if available.
+
     Args:
         base_score: The base calculated score
         extractions: List of novelty-ranked extractions
@@ -210,31 +213,24 @@ def _calculate_novelty_adjusted_score(
     Returns:
         Novelty-adjusted score (can be higher or lower)
     """
-    # Calculate average novelty ranking
-    novelty_scores = [e.novelty_ranking for e in extractions]
-    avg_novelty = sum(novelty_scores) / len(novelty_scores) if novelty_scores else 3
+    # Get novelty adjustment factors from config if available
+    try:
+        novelty_config = config.get_novelty_config()
+        base_factor = novelty_config.get("base_factor", 0.025)
+        contradiction_penalty = novelty_config.get("contradiction_penalty", 0.05)
+        extension_bonus = novelty_config.get("extension_bonus", 0.03)
+    except (AttributeError, Exception):
+        base_factor = 0.025
+        contradiction_penalty = 0.05
+        extension_bonus = 0.03
 
-    # Novelty adjustment factor (1-5 scale maps to -5% to +5% adjustment)
-    # 1 = -5%, 2 = -2.5%, 3 = 0%, 4 = +2.5%, 5 = +5%
-    adjustment_factor = (avg_novelty - 3) * 0.025
-
-    # Check for contradictions (penalty)
-    has_contradictions = any(e.contradicts_baseline for e in extractions)
-    if has_contradictions:
-        adjustment_factor -= 0.05  # Additional 5% penalty
-
-    # Check for significant extensions (bonus)
-    has_extensions = any(e.extends_baseline for e in extractions)
-    if has_extensions:
-        adjustment_factor += 0.03  # Additional 3% bonus
-
-    # Apply adjustment
-    adjusted_score = base_score * (1 + adjustment_factor)
-
-    # Clamp to valid range
-    adjusted_score = max(0, min(100, adjusted_score))
-
-    return adjusted_score
+    return calculate_novelty_adjusted_score(
+        base_score=base_score,
+        extractions=extractions,
+        base_factor=base_factor,
+        contradiction_penalty=contradiction_penalty,
+        extension_bonus=extension_bonus
+    )
 
 
 def _generate_research_trajectory(
@@ -335,7 +331,7 @@ Write in clear, academic prose suitable for inclusion in a peer review.
         system_prompt="You are an expert academic reviewer skilled at positioning research within the broader literature.",
         provider=config.get_llm_config()['synthesizer_provider'],
         model=config.get_llm_config()['synthesizer_model'],
-        temperature=0.6,
+        temperature=config.get_agent_config()['critic_temperature'],
         max_retries=2
     )
 
@@ -567,7 +563,7 @@ When writing your review, consider how the paper's claims relate to this literat
         actual_system_prompt = "Respond ONLY with valid JSON. Your output must be JSON-formatted.\n\n" + system_prompt
 
     # Call LLM with JSON parsing retry
-    max_json_retries = 3
+    max_json_retries = config.get_agent_config()['critic_max_json_retries']
     review_data = None
     raw_response = None
 
