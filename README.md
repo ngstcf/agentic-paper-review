@@ -102,6 +102,38 @@ python compare_reports.py --run-dir my_review_run
 python judge_conflicts.py --run-dir my_review_run
 ```
 
+## Web Dashboard
+
+A built-in web UI for configuring and running reviews from the browser.
+
+### Start the Dashboard
+
+```bash
+python web_app.py --port 8050
+```
+
+Open **http://localhost:8050**.
+
+### Features
+
+- **Start/Stop Runs** — Select a run directory, pick Standard or Literature-Grounded mode, and start reviews with one click
+- **Real-time Progress** — Live SSE progress bar, stage indicators, cost tracking, and event log
+- **Config Editor** — Inline-edit provider, model, temperature, and other settings per run (API keys remain masked and non-editable)
+- **Criteria Editor** — Edit `criteria.yaml` directly in the browser with YAML validation
+- **Prompt Editor** — Edit all 4 prompt templates (extractor/synthesizer system/user) with template variable hints
+- **Literature Sources Editor** — Edit `literature_sources.yaml` with YAML validation
+- **Results Table** — Sortable table with scores, recommendations, cost, and one-click review viewing
+- **Review Viewer** — Modal viewer with rendered Markdown for individual paper reviews
+
+### Dashboard Tabs
+
+| Tab | Description |
+|-----|-------------|
+| Config | Inline-editable `.env` settings (providers, models, temperatures, etc.) |
+| Criteria | Full YAML editor for review criteria with save/reload and validation |
+| Prompts | Select and edit prompt templates with template variable reference |
+| Sources | YAML editor for literature source configuration |
+
 ## Customization
 
 ### Review Criteria
