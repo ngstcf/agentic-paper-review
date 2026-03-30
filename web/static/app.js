@@ -10,6 +10,10 @@ let runStartTime = null;
 let elapsedInterval = null;
 let sortColumn = null;
 let sortAsc = true;
+let promptFiles = [];        // [{filename, content}, ...]
+let currentPromptFilename = "";
+let configDirty = {};        // {key: value} pending saves
+let originalConfig = {};     // snapshot before edits
 
 // DOM refs
 const runSelector = document.getElementById("run-selector");
@@ -26,11 +30,25 @@ const resultsTbody = document.getElementById("results-tbody");
 const noResults = document.getElementById("no-results");
 const logContent = document.getElementById("log-content");
 const configContent = document.getElementById("config-content");
-const criteriaContent = document.getElementById("criteria-content");
 const reviewModal = document.getElementById("review-modal");
 const reviewModalTitle = document.getElementById("review-modal-title");
 const reviewModalBody = document.getElementById("review-modal-body");
 const reviewModalClose = document.getElementById("review-modal-close");
+const promptSelector = document.getElementById("prompt-selector");
+const promptsEditor = document.getElementById("prompts-editor");
+const promptVarsHint = document.getElementById("prompt-vars-hint");
+const promptSaveBtn = document.getElementById("prompt-save-btn");
+const promptReloadBtn = document.getElementById("prompt-reload-btn");
+const promptValidation = document.getElementById("prompt-validation");
+const criteriaEditorWrap = document.getElementById("criteria-editor-wrap");
+const criteriaSaveBtn = document.getElementById("criteria-save-btn");
+const criteriaReloadBtn = document.getElementById("criteria-reload-btn");
+const criteriaValidation = document.getElementById("criteria-validation");
+const sourcesEditor = document.getElementById("sources-editor");
+const sourcesSaveBtn = document.getElementById("sources-save-btn");
+const sourcesReloadBtn = document.getElementById("sources-reload-btn");
+const sourcesValidation = document.getElementById("sources-validation");
+const configSaveBtn = document.getElementById("config-save-btn");
 
 // ---- Initialization ----
 
@@ -40,6 +58,31 @@ async function init() {
     startBtn.addEventListener("click", startRun);
     stopBtn.addEventListener("click", stopRun);
     reviewModalClose.addEventListener("click", () => reviewModal.style.display = "none");
+
+    // Sidebar tabs
+    document.querySelectorAll(".sidebar-tab").forEach(tab => {
+        tab.addEventListener("click", () => switchSidebarTab(tab.dataset.tab));
+    });
+
+    // Prompt editor
+    promptSelector.addEventListener("change", onPromptSelected);
+    promptSaveBtn.addEventListener("click", savePrompt);
+    promptReloadBtn.addEventListener("click", reloadPrompt);
+
+    // Criteria editor
+    criteriaSaveBtn.addEventListener("click", saveCriteria);
+    criteriaReloadBtn.addEventListener("click", reloadCriteria);
+
+    // Sources editor
+    sourcesSaveBtn.addEventListener("click", saveSources);
+    sourcesReloadBtn.addEventListener("click", reloadSources);
+
+    // Config save
+    configSaveBtn.addEventListener("click", saveConfig);
+
+    // Load global resources
+    await loadPrompts();
+    await loadSources();
 
     // Sort headers
     document.querySelectorAll("#results-table th[data-sort]").forEach(th => {
@@ -79,34 +122,16 @@ async function onRunSelected() {
 
     if (!currentRunDir) {
         configContent.innerHTML = '<p class="placeholder-text">Select a run directory to view config</p>';
-        criteriaContent.innerHTML = '<p class="placeholder-text">Select a run directory to view criteria</p>';
+        criteriaEditorWrap.innerHTML = '<p class="placeholder-text">Select a run directory to edit criteria</p>';
         return;
     }
 
-    // Load config
-    try {
-        const data = await api(`/api/config/${currentRunDir}`);
-        let html = "";
-        for (const [k, v] of Object.entries(data.config)) {
-            html += `<div class="config-item"><span class="config-key">${k}</span><span class="config-value">${v}</span></div>`;
-        }
-        configContent.innerHTML = html || '<p class="placeholder-text">No config found</p>';
-    } catch {
-        configContent.innerHTML = '<p class="placeholder-text">Could not load config</p>';
-    }
+    // Load editable config
+    configDirty = {};
+    await loadConfig();
 
-    // Load criteria
-    try {
-        const data = await api(`/api/criteria/${currentRunDir}`);
-        const criteria = data.criteria?.criteria || [];
-        let html = "";
-        for (const c of criteria) {
-            html += `<div class="config-item"><span class="config-key">${c.id}</span><span class="config-value">${c.weight}%</span></div>`;
-        }
-        criteriaContent.innerHTML = html || '<p class="placeholder-text">No criteria found</p>';
-    } catch {
-        criteriaContent.innerHTML = '<p class="placeholder-text">Could not load criteria</p>';
-    }
+    // Load criteria as raw YAML
+    await loadCriteria();
 
     // Load existing results
     await loadResults();
@@ -423,6 +448,246 @@ function renderMarkdown(text) {
     // Horizontal rule
     html = html.replace(/^---$/gm, "<hr>");
     return html;
+}
+
+// ---- Sidebar Tab Switching ----
+
+function switchSidebarTab(tabName) {
+    document.querySelectorAll(".sidebar-tab").forEach(t => t.classList.remove("active"));
+    document.querySelector(`.sidebar-tab[data-tab="${tabName}"]`).classList.add("active");
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    document.getElementById(`tab-${tabName}`).classList.add("active");
+}
+
+// ---- Config Editor ----
+
+const PROVIDER_OPTIONS = ["openai", "anthropic", "deepseek", "google", "mistral", "ollama"];
+const PROVIDER_KEYS = ["PROVIDER_EXTRACTION", "PROVIDER_SYNTHESIS"];
+const NUMBER_KEYS = ["TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS", "MAX_TOKENS_EXTRACTION", "MAX_TOKENS_SYNTHESIS", "EXTRACTION_BATCH_SIZE", "CONCURRENCY"];
+
+async function loadConfig() {
+    try {
+        const data = await api(`/api/config/${currentRunDir}`);
+        originalConfig = data.config || {};
+        renderConfigEditor(originalConfig);
+    } catch {
+        configContent.innerHTML = '<p class="placeholder-text">Could not load config</p>';
+    }
+}
+
+function renderConfigEditor(config) {
+    let html = "";
+    for (const [k, v] of Object.entries(config)) {
+        const isMasked = v === "***masked***";
+        if (isMasked) {
+            html += `<div class="config-item config-locked">
+                <span class="config-key">${escapeHtml(k)}</span>
+                <span class="config-value locked">***<span class="lock-hint">edit .env directly</span></span>
+            </div>`;
+            continue;
+        }
+        const isProvider = PROVIDER_KEYS.includes(k);
+        const isNumber = NUMBER_KEYS.includes(k);
+        let inputHtml;
+        if (isProvider) {
+            const opts = PROVIDER_OPTIONS.map(o =>
+                `<option value="${o}" ${o === v ? "selected" : ""}>${o}</option>`
+            ).join("");
+            inputHtml = `<select class="config-input config-select" data-key="${escapeHtml(k)}">${opts}</select>`;
+        } else if (isNumber) {
+            const step = k.includes("TEMPERATURE") ? 'step="0.1"' : "";
+            inputHtml = `<input type="number" class="config-input config-number" data-key="${escapeHtml(k)}" value="${escapeHtml(v)}" ${step}>`;
+        } else {
+            inputHtml = `<input type="text" class="config-input config-text" data-key="${escapeHtml(k)}" value="${escapeHtml(v)}">`;
+        }
+        html += `<div class="config-item editable-config">
+            <span class="config-key">${escapeHtml(k)}</span>
+            ${inputHtml}
+        </div>`;
+    }
+    configContent.innerHTML = html || '<p class="placeholder-text">No config found</p>';
+
+    // Track changes
+    configContent.querySelectorAll(".config-input").forEach(el => {
+        el.addEventListener("change", () => {
+            configDirty[el.dataset.key] = el.value;
+            configSaveBtn.style.display = Object.keys(configDirty).length ? "inline-block" : "none";
+        });
+    });
+}
+
+async function saveConfig() {
+    if (!currentRunDir || !Object.keys(configDirty).length) return;
+    try {
+        // Send each changed key one by one (API handles one key at a time)
+        for (const [key, value] of Object.entries(configDirty)) {
+            const data = await api(`/api/config/${currentRunDir}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key, value }),
+            });
+            originalConfig = data.config || originalConfig;
+        }
+        configDirty = {};
+        renderConfigEditor(originalConfig);
+        configSaveBtn.style.display = "none";
+        addLog("Config saved", "success");
+    } catch (e) {
+        addLog("Failed to save config: " + e.message, "error");
+    }
+}
+
+// ---- Criteria Editor ----
+
+let criteriaTextarea = null;
+
+async function loadCriteria() {
+    if (!currentRunDir) return;
+    try {
+        const data = await api(`/api/criteria-raw/${currentRunDir}`);
+        criteriaEditorWrap.innerHTML = "";
+        criteriaTextarea = document.createElement("textarea");
+        criteriaTextarea.className = "code-editor";
+        criteriaTextarea.value = data.content || "";
+        criteriaEditorWrap.appendChild(criteriaTextarea);
+        criteriaSaveBtn.style.display = "inline-block";
+        criteriaReloadBtn.style.display = "inline-block";
+        criteriaValidation.textContent = "";
+    } catch (e) {
+        criteriaEditorWrap.innerHTML = `<p class="placeholder-text">Could not load criteria: ${escapeHtml(e.message)}</p>`;
+        criteriaSaveBtn.style.display = "none";
+        criteriaReloadBtn.style.display = "none";
+    }
+}
+
+async function saveCriteria() {
+    if (!currentRunDir || !criteriaTextarea) return;
+    criteriaValidation.textContent = "";
+    try {
+        await api(`/api/criteria/${currentRunDir}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: criteriaTextarea.value }),
+        });
+        criteriaValidation.textContent = "Saved!";
+        criteriaValidation.className = "validation-msg success";
+        addLog("Criteria saved", "success");
+    } catch (e) {
+        criteriaValidation.textContent = e.message;
+        criteriaValidation.className = "validation-msg error";
+    }
+}
+
+async function reloadCriteria() {
+    await loadCriteria();
+}
+
+// ---- Prompts Editor ----
+
+const PROMPT_TEMPLATE_VARS = {
+    "extractor_system.txt": "No template variables (system instructions)",
+    "extractor_user.txt": "{domain}, {paper_markdown}, {criterion_name}, {criterion_description}, {scale_definition}",
+    "synthesizer_system.txt": "No template variables (system instructions)",
+    "synthesizer_user.txt": "{paper_title}, {paper_abstract}, {json_dump_of_extractions}, {weights_table}, {calculated_score}, {calculated_recommendation}",
+};
+
+async function loadPrompts() {
+    try {
+        const data = await api("/api/prompts");
+        promptFiles = data.prompts || [];
+        promptSelector.innerHTML = "";
+        for (const p of promptFiles) {
+            const opt = document.createElement("option");
+            opt.value = p.filename;
+            opt.textContent = p.filename.replace(/\.txt$/, "");
+            promptSelector.appendChild(opt);
+        }
+        if (promptFiles.length > 0) {
+            promptSelector.value = promptFiles[0].filename;
+            onPromptSelected();
+        }
+    } catch {
+        promptSelector.innerHTML = '<option value="">Error loading prompts</option>';
+    }
+}
+
+function onPromptSelected() {
+    const fn = promptSelector.value;
+    if (!fn) return;
+    currentPromptFilename = fn;
+    const file = promptFiles.find(p => p.filename === fn);
+    promptsEditor.value = file ? file.content : "";
+    promptVarsHint.textContent = PROMPT_TEMPLATE_VARS[fn] || "";
+    promptSaveBtn.disabled = false;
+    promptValidation.textContent = "";
+}
+
+async function savePrompt() {
+    if (!currentPromptFilename) return;
+    promptValidation.textContent = "";
+    try {
+        await api(`/api/prompts/${currentPromptFilename}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: promptsEditor.value }),
+        });
+        // Update local cache
+        const idx = promptFiles.findIndex(p => p.filename === currentPromptFilename);
+        if (idx >= 0) promptFiles[idx].content = promptsEditor.value;
+        promptValidation.textContent = "Saved!";
+        promptValidation.className = "validation-msg success";
+        addLog(`Prompt '${currentPromptFilename}' saved`, "success");
+    } catch (e) {
+        promptValidation.textContent = e.message;
+        promptValidation.className = "validation-msg error";
+    }
+}
+
+async function reloadPrompt() {
+    try {
+        const data = await api("/api/prompts");
+        promptFiles = data.prompts || [];
+        onPromptSelected();
+        promptValidation.textContent = "Reloaded from disk";
+        promptValidation.className = "validation-msg success";
+    } catch (e) {
+        promptValidation.textContent = e.message;
+        promptValidation.className = "validation-msg error";
+    }
+}
+
+// ---- Literature Sources Editor ----
+
+async function loadSources() {
+    try {
+        const data = await api("/api/literature-sources");
+        sourcesEditor.value = data.content || "";
+        sourcesValidation.textContent = "";
+    } catch {
+        sourcesEditor.value = "";
+        sourcesEditor.placeholder = "Could not load literature sources";
+    }
+}
+
+async function saveSources() {
+    sourcesValidation.textContent = "";
+    try {
+        await api("/api/literature-sources", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: sourcesEditor.value }),
+        });
+        sourcesValidation.textContent = "Saved!";
+        sourcesValidation.className = "validation-msg success";
+        addLog("Literature sources saved", "success");
+    } catch (e) {
+        sourcesValidation.textContent = e.message;
+        sourcesValidation.className = "validation-msg error";
+    }
+}
+
+async function reloadSources() {
+    await loadSources();
 }
 
 // Init

@@ -468,6 +468,154 @@ async def get_criteria(run_dir: str):
     return {"criteria": _load_criteria(full_path)}
 
 
+@app.get("/api/criteria-raw/{run_dir:path}")
+async def get_criteria_raw(run_dir: str):
+    """Return raw YAML text of criteria.yaml for editing."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+    criteria_path = os.path.join(full_path, "input", "criteria.yaml")
+    if not os.path.exists(criteria_path):
+        criteria_path = os.path.join(root, "config", "criteria.yaml")
+    if not os.path.exists(criteria_path):
+        raise HTTPException(status_code=404, detail="criteria.yaml not found")
+    with open(criteria_path) as f:
+        return {"content": f.read()}
+
+
+@app.put("/api/criteria/{run_dir:path}")
+async def update_criteria(run_dir: str, request: Request):
+    """Update criteria.yaml for a run directory."""
+    import yaml
+    body = await request.json()
+    content = body.get("content", "")
+    try:
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+    criteria_path = os.path.join(full_path, "input", "criteria.yaml")
+    if not os.path.exists(criteria_path):
+        os.makedirs(os.path.dirname(criteria_path), exist_ok=True)
+    with open(criteria_path, "w") as f:
+        f.write(content)
+    return {"success": True}
+
+
+@app.put("/api/config/{run_dir:path}")
+async def update_config(run_dir: str, request: Request):
+    """Update a single key in the run's .env file."""
+    ALLOWED_KEYS = {
+        "PROVIDER_EXTRACTION", "PROVIDER_SYNTHESIS",
+        "MODEL_EXTRACTION", "MODEL_SYNTHESIS",
+        "TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS",
+        "MAX_TOKENS_EXTRACTION", "MAX_TOKENS_SYNTHESIS",
+        "EXTRACTION_BATCH_SIZE", "CONCURRENCY",
+        "DOMAIN", "LANGUAGE",
+    }
+    body = await request.json()
+    key = body.get("key", "")
+    value = body.get("value", "")
+
+    if not key:
+        raise HTTPException(status_code=400, detail="key is required")
+    if "KEY" in key.upper() or "SECRET" in key.upper():
+        raise HTTPException(status_code=400, detail="Cannot modify API keys via the dashboard")
+    if key not in ALLOWED_KEYS:
+        raise HTTPException(status_code=400, detail=f"Key '{key}' is not editable. Allowed: {sorted(ALLOWED_KEYS)}")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+    env_path = os.path.join(full_path, "input", ".env")
+    if not os.path.exists(env_path):
+        raise HTTPException(status_code=404, detail=".env not found")
+
+    # Read, update, write back — preserving comments and order
+    lines = []
+    found = False
+    with open(env_path) as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k, _ = stripped.split("=", 1)
+                if k == key:
+                    lines.append(f"{key}={value}\n")
+                    found = True
+                    continue
+            lines.append(line)
+    if not found:
+        lines.append(f"{key}={value}\n")
+    with open(env_path, "w") as f:
+        f.writelines(lines)
+
+    return {"config": _load_config_safe(full_path)}
+
+
+@app.get("/api/prompts")
+async def get_prompts():
+    """Return all prompt files with their content."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    prompts_dir = os.path.join(root, "config", "prompts")
+    if not os.path.isdir(prompts_dir):
+        return {"prompts": []}
+    prompts = []
+    for fn in sorted(os.listdir(prompts_dir)):
+        if fn.endswith(".txt"):
+            with open(os.path.join(prompts_dir, fn)) as f:
+                prompts.append({"filename": fn, "content": f.read()})
+    return {"prompts": prompts}
+
+
+@app.put("/api/prompts/{filename}")
+async def update_prompt(filename: str, request: Request):
+    """Update a prompt file."""
+    ALLOWED_PROMPTS = {
+        "extractor_system.txt", "extractor_user.txt",
+        "synthesizer_system.txt", "synthesizer_user.txt",
+    }
+    if filename not in ALLOWED_PROMPTS:
+        raise HTTPException(status_code=400, detail=f"Unknown prompt file: {filename}")
+
+    body = await request.json()
+    content = body.get("content", "")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    prompt_path = os.path.join(root, "config", "prompts", filename)
+    with open(prompt_path, "w") as f:
+        f.write(content)
+    return {"success": True}
+
+
+@app.get("/api/literature-sources")
+async def get_literature_sources():
+    """Return literature_sources.yaml content."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(root, "config", "literature_sources.yaml")
+    if not os.path.exists(path):
+        return {"content": ""}
+    with open(path) as f:
+        return {"content": f.read()}
+
+
+@app.put("/api/literature-sources")
+async def update_literature_sources(request: Request):
+    """Update literature_sources.yaml."""
+    import yaml
+    body = await request.json()
+    content = body.get("content", "")
+    try:
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(root, "config", "literature_sources.yaml")
+    with open(path, "w") as f:
+        f.write(content)
+    return {"success": True}
+
+
 @app.get("/api/reviews/{run_dir:path}")
 async def list_reviews(run_dir: str):
     root = os.path.dirname(os.path.abspath(__file__))

@@ -28,13 +28,64 @@
     <div class="main-content">
         <!-- Left: Config Panel -->
         <aside class="config-panel">
-            <h2>Configuration</h2>
-            <div id="config-content" class="config-content">
-                <p class="placeholder-text">Select a run directory to view config</p>
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="config">Config</button>
+                <button class="sidebar-tab" data-tab="criteria">Criteria</button>
+                <button class="sidebar-tab" data-tab="prompts">Prompts</button>
+                <button class="sidebar-tab" data-tab="sources">Sources</button>
             </div>
-            <h2>Criteria</h2>
-            <div id="criteria-content" class="config-content">
-                <p class="placeholder-text">Select a run directory to view criteria</p>
+
+            <!-- Config Tab -->
+            <div id="tab-config" class="tab-panel active">
+                <div id="config-content" class="config-content">
+                    <p class="placeholder-text">Select a run directory to view config</p>
+                </div>
+                <div class="editor-actions">
+                    <button id="config-save-btn" class="btn btn-sm btn-primary" style="display:none">Save All</button>
+                </div>
+            </div>
+
+            <!-- Criteria Tab -->
+            <div id="tab-criteria" class="tab-panel">
+                <div id="criteria-editor-wrap" class="editor-wrap">
+                    <p class="placeholder-text">Select a run directory to edit criteria</p>
+                </div>
+                <div class="editor-actions">
+                    <button id="criteria-save-btn" class="btn btn-sm btn-primary" style="display:none">Save</button>
+                    <button id="criteria-reload-btn" class="btn btn-sm btn-secondary" style="display:none">Reload</button>
+                </div>
+                <div id="criteria-validation" class="validation-msg"></div>
+            </div>
+
+            <!-- Prompts Tab -->
+            <div id="tab-prompts" class="tab-panel">
+                <div class="prompt-selector-wrap">
+                    <label for="prompt-selector" class="editor-label">Prompt File:</label>
+                    <select id="prompt-selector" class="select-input prompt-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div id="prompts-editor-wrap" class="editor-wrap">
+                    <textarea id="prompts-editor" class="code-editor" placeholder="Select a prompt file..."></textarea>
+                </div>
+                <div id="prompt-vars-hint" class="vars-hint"></div>
+                <div class="editor-actions">
+                    <button id="prompt-save-btn" class="btn btn-sm btn-primary" disabled>Save</button>
+                    <button id="prompt-reload-btn" class="btn btn-sm btn-secondary">Reload</button>
+                </div>
+                <div id="prompt-validation" class="validation-msg"></div>
+            </div>
+
+            <!-- Sources Tab -->
+            <div id="tab-sources" class="tab-panel">
+                <div id="sources-editor-wrap" class="editor-wrap">
+                    <textarea id="sources-editor" class="code-editor" placeholder="Loading literature sources..."></textarea>
+                </div>
+                <div class="editor-actions">
+                    <button id="sources-save-btn" class="btn btn-sm btn-primary">Save</button>
+                    <button id="sources-reload-btn" class="btn btn-sm btn-secondary">Reload</button>
+                </div>
+                <div id="sources-validation" class="validation-msg"></div>
             </div>
         </aside>
 

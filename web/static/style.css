@@ -85,11 +85,11 @@ body {
 
 /* Config Panel (left sidebar) */
 .config-panel {
-    width: 260px;
-    min-width: 260px;
+    width: 360px;
+    min-width: 320px;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
-    padding: 16px;
+    padding: 12px;
     overflow-y: auto;
     flex-shrink: 0;
 }
@@ -104,6 +104,185 @@ body {
 }
 
 .config-panel h2:first-child { margin-top: 0; }
+
+/* Sidebar Tabs */
+.sidebar-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 12px;
+}
+
+.sidebar-tab {
+    flex: 1;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.sidebar-tab:hover { color: var(--text-primary); }
+
+.sidebar-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Tab Panels */
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* Code Editor Textarea */
+.code-editor {
+    width: 100%;
+    min-height: 300px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 10px;
+    resize: vertical;
+    tab-size: 2;
+}
+
+.code-editor:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.editor-wrap {
+    margin-bottom: 8px;
+}
+
+.editor-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.editor-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.prompt-selector-wrap {
+    margin-bottom: 8px;
+}
+
+.prompt-select {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+/* Template variable hints */
+.vars-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 4px 0 8px;
+    line-height: 1.4;
+}
+
+/* Validation messages */
+.validation-msg {
+    font-size: 11px;
+    min-height: 16px;
+    padding: 2px 0;
+}
+
+.validation-msg.success { color: var(--success); }
+.validation-msg.error { color: var(--danger); }
+
+/* Inline config editing */
+.config-item.editable-config {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.config-item.editable-config .config-key {
+    min-width: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+.config-input {
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    min-width: 0;
+}
+
+.config-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.config-select {
+    cursor: pointer;
+}
+
+.config-number {
+    width: 70px;
+    flex: none;
+}
+
+.config-text {
+    width: 100%;
+}
+
+.config-locked .config-value.locked {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.lock-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+/* Small buttons */
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 11px;
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
 
 .config-content {
     font-size: 12px;
@@ -434,7 +613,7 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
     .main-content { flex-direction: column; }
-    .config-panel { width: 100%; min-width: auto; max-height: 200px; }
+    .config-panel { width: 100%; min-width: auto; max-height: 400px; }
     .header { flex-wrap: wrap; }
     .header-right { flex-wrap: wrap; }
 }
