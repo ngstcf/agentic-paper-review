@@ -112,7 +112,14 @@ async function init() {
 
 async function api(path, opts = {}) {
     const res = await fetch(path, opts);
-    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
+    if (!res.ok) {
+        let detail = `${res.status}: ${res.statusText}`;
+        try {
+            const body = await res.json();
+            if (body.detail) detail = body.detail;
+        } catch {}
+        throw new Error(detail);
+    }
     return res.json();
 }
 
@@ -736,7 +743,12 @@ async function startJudge() {
         startElapsedTimer();
         addLog("Judge pipeline started...", "info");
     } catch (e) {
-        addLog("Judge failed: " + e.message, "error");
+        const msg = e.message || "Unknown error";
+        if (msg.includes("2 consolidated") || msg.includes("400")) {
+            addLog("Cannot judge: run reviews with at least 2 different models first, then compare.", "warning");
+        } else {
+            addLog("Judge failed: " + msg, "error");
+        }
         judgeBtn.disabled = false;
     }
 }
