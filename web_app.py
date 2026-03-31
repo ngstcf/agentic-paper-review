@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.progress import (
     get_emitter, get_sse_backend, SSEBackend,
     Event, RunStarted, RunCompleted, PaperCompleted, RunProgress,
+    StageStarted, StageCompleted, Error, CostUpdate,
     configure_emitter,
 )
 
@@ -82,7 +83,8 @@ def _load_config_safe(run_dir: str) -> Dict[str, Any]:
                     if "KEY" in key.upper() or "SECRET" in key.upper():
                         config_data[key] = "***masked***"
                     else:
-                        config_data[key] = value
+                        # Ensure value is always a plain string
+                        config_data[key] = str(value)
     return config_data
 
 
@@ -120,13 +122,17 @@ def _parse_csv_results(run_dir: str) -> List[Dict[str, Any]]:
     reports_dir = os.path.join(run_dir, "outputs", "reports")
     if not os.path.isdir(reports_dir):
         return []
-    csv_files = sorted(glob.glob(os.path.join(reports_dir, "*.csv")), reverse=True)
+    # Match both naming conventions: consolidated_reviews_*.csv and report_consolidated_*.csv
+    csv_files = (
+        sorted(glob.glob(os.path.join(reports_dir, "consolidated_reviews_*.csv")), reverse=True)
+        or sorted(glob.glob(os.path.join(reports_dir, "report_consolidated_*.csv")), reverse=True)
+    )
     if not csv_files:
         return []
     try:
         import pandas as pd
         df = pd.read_csv(csv_files[0])
-        return df.to_dict(orient="records")
+        return df.fillna("").to_dict(orient="records")
     except Exception:
         return []
 
@@ -451,6 +457,97 @@ async def get_results(run_dir: str):
     return {"results": _parse_csv_results(full_path)}
 
 
+@app.get("/api/all-reviews/{run_dir:path}")
+async def get_all_reviews(run_dir: str):
+    """Return ALL review files for a run directory with parsed metadata and scores."""
+    import re
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+    reviews_dir = os.path.join(full_path, "outputs", "reviews")
+    if not os.path.isdir(reviews_dir):
+        return {"reviews": []}
+
+    reviews = []
+    for f in sorted(glob.glob(os.path.join(reviews_dir, "*.md")), reverse=True):
+        fname = os.path.basename(f)
+        # Parse: {paper}_{provider1}_{model1}_{provider2}_{model2}_{YYYYMMDD_HHMMSS}.md
+        parts = fname.replace(".md", "").split("_")
+        timestamp = ""
+        extractor = ""
+        synthesizer = ""
+        paper = ""
+
+        # Find timestamp pattern (8 digits _ 6 digits)
+        ts_idx = None
+        for i, p in enumerate(parts):
+            if re.match(r"^\d{8}$", p) and i + 1 < len(parts) and re.match(r"^\d{6}$", parts[i + 1]):
+                ts_idx = i
+                timestamp = f"{p}_{parts[i+1]}"
+                break
+
+        if ts_idx is not None:
+            paper = "_".join(parts[:ts_idx - 4]) if ts_idx >= 5 else "_".join(parts[:ts_idx])
+            extractor = "/".join(parts[ts_idx - 4:ts_idx - 2]) if ts_idx >= 4 else ""
+            synthesizer = "/".join(parts[ts_idx - 2:ts_idx]) if ts_idx >= 2 else ""
+        else:
+            paper = fname.replace(".md", "")
+
+        # Quick-score extraction from file content
+        score = None
+        recommendation = None
+        cost = None
+        confidence = None
+        try:
+            with open(f) as fh:
+                head = fh.read(4000)  # Score/rec/confidence are near the top
+            with open(f) as fh:
+                fh.seek(max(0, os.path.getsize(f) - 1500))
+                tail = fh.read()      # Cost is at the bottom
+            # Extract score — handles "**Overall Score:** **61.4 / 100**"
+            m = re.search(r"Overall Score:.*?(\d+\.?\d*)\s*(?:/\s*100)?", head, re.IGNORECASE)
+            if m:
+                score = float(m.group(1))
+            # Extract recommendation — handles "**Recommendation:** **REVISE AND RESUBMIT**"
+            m = re.search(r"Recommendation:.*?((?:Accept|Revise|Reject|Resubmit|Strong|Weak|Minor|Major)[A-Za-z\s&]*?)[\*\n\r]", head, re.IGNORECASE)
+            if m:
+                recommendation = m.group(1).strip()
+            # Extract cost — at bottom of file
+            m = re.search(r"(?:Total\s+)?(?:API\s+)?Cost:.*?[\$]?([\d.]+)", tail, re.IGNORECASE)
+            if m:
+                cost = float(m.group(1))
+            # Extract confidence — handles "**Confidence:** 85%" or "**Confidence:** 0.85"
+            m = re.search(r"Confidence:\s*\*{0,2}\s*(\d+\.?\d*)\s*%?", head, re.IGNORECASE)
+            if m:
+                val = float(m.group(1))
+                confidence = val if val <= 1.0 else val / 100.0
+        except Exception:
+            pass
+
+        # Format timestamp for display
+        display_date = ""
+        if timestamp:
+            try:
+                display_date = datetime.strptime(timestamp, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                display_date = timestamp
+
+        reviews.append({
+            "filename": fname,
+            "paper": paper,
+            "extractor_model": extractor,
+            "synthesizer_model": synthesizer,
+            "timestamp": timestamp,
+            "display_date": display_date,
+            "overall_score": score,
+            "recommendation": recommendation,
+            "total_cost": cost,
+            "confidence": confidence,
+            "size": os.path.getsize(f),
+        })
+
+    return {"reviews": reviews}
+
+
 @app.get("/api/review/{run_dir:path}/{filename:path}")
 async def get_review(run_dir: str, filename: str):
     root = os.path.dirname(os.path.abspath(__file__))
@@ -508,15 +605,22 @@ async def update_config(run_dir: str, request: Request):
     """Update a single key in the run's .env file."""
     ALLOWED_KEYS = {
         "PROVIDER_EXTRACTION", "PROVIDER_SYNTHESIS",
+        "EXTRACTOR_MODEL", "SYNTHESIZER_MODEL",
         "MODEL_EXTRACTION", "MODEL_SYNTHESIS",
-        "TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS",
+        "TEMPERATURE", "TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS",
         "MAX_TOKENS_EXTRACTION", "MAX_TOKENS_SYNTHESIS",
-        "EXTRACTION_BATCH_SIZE", "CONCURRENCY",
+        "EXTRACTION_BATCH_SIZE", "MAX_PARALLEL_EXTRACTIONS", "CONCURRENCY",
         "DOMAIN", "LANGUAGE",
+        "MAX_RETRIES", "JUDGE_PROVIDER", "JUDGE_MODEL", "JUDGE_TEMPERATURE",
+        "LITERATURE_GROUNDING_ENABLED",
     }
     body = await request.json()
     key = body.get("key", "")
     value = body.get("value", "")
+
+    # Sanitize NaN/Inf from numeric inputs
+    if isinstance(value, float) and (value != value or abs(value) == float("inf")):
+        raise HTTPException(status_code=400, detail="Value must be a valid number")
 
     if not key:
         raise HTTPException(status_code=400, detail="key is required")
@@ -621,6 +725,127 @@ async def list_reviews(run_dir: str):
     root = os.path.dirname(os.path.abspath(__file__))
     full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
     return {"reviews": _get_reviews(full_path)}
+
+
+# ---------------------------------------------------------------------------
+# Judge endpoints
+# ---------------------------------------------------------------------------
+
+_active_judges: Dict[str, bool] = {}
+
+
+def _run_judge_pipeline(run_dir: str, run_id: str):
+    """Run compare + judge in a background thread."""
+    from compare_reports import find_discrepancies
+    from judge_conflicts import adjudicate_conflicts
+
+    emitter = get_emitter()
+
+    try:
+        _active_judges[run_id] = True
+
+        # Stage 1: Compare reports
+        emitter.emit(StageStarted(stage_name="Judge-Compare", paper_filename=""))
+        t0 = time.time()
+
+        # find_discrepancies prints to stdout; we capture the key info ourselves
+        reports_dir = os.path.join(run_dir, "outputs", "reports")
+        csv_files = sorted(glob.glob(os.path.join(reports_dir, "report_consolidated_*.csv")))
+        if len(csv_files) < 2:
+            emitter.emit(Error(stage_name="Judge-Compare",
+                               message="Need at least 2 consolidated reports to compare. Run reviews with different models first.",
+                               recoverable=False))
+            return
+
+        find_discrepancies(run_dir)
+
+        discrepancy_files = sorted(glob.glob(os.path.join(reports_dir, "HUMAN_REVIEW_discrepancies_*.csv")))
+        if not discrepancy_files:
+            emitter.emit(StageCompleted(stage_name="Judge-Compare", duration_s=time.time() - t0,
+                                        result_summary="No conflicts found"))
+            emitter.emit(RunCompleted(total_papers=0, total_cost=0.0, total_time_s=time.time() - t0,
+                                      output_dir=os.path.join(run_dir, "outputs")))
+            return
+
+        import pandas as pd
+        disc_df = pd.read_csv(discrepancy_files[-1])
+        conflict_count = disc_df["paper_filename"].nunique() if "paper_filename" in disc_df.columns else 0
+        emitter.emit(StageCompleted(stage_name="Judge-Compare", duration_s=time.time() - t0,
+                                    result_summary=f"{conflict_count} conflicts found"))
+
+        # Stage 2: Adjudicate
+        emitter.emit(StageStarted(stage_name="Judge-Adjudicate", paper_filename=""))
+        t1 = time.time()
+        adjudicate_conflicts(run_dir)
+        emitter.emit(StageCompleted(stage_name="Judge-Adjudicate", duration_s=time.time() - t1,
+                                    result_summary="Done"))
+
+        emitter.emit(RunCompleted(total_papers=conflict_count, total_cost=0.0,
+                                  total_time_s=time.time() - t0,
+                                  output_dir=os.path.join(run_dir, "outputs")))
+    except Exception as e:
+        import traceback
+        emitter.emit(Error(stage_name="judge", message=str(e), recoverable=False))
+        traceback.print_exc()
+    finally:
+        _active_judges.pop(run_id, None)
+
+
+@app.post("/api/judge/{run_dir:path}")
+async def start_judge(run_dir: str):
+    """Start the compare + judge pipeline for a run directory."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+
+    if not os.path.isdir(full_path):
+        raise HTTPException(status_code=404, detail="Run directory not found")
+
+    reports_dir = os.path.join(full_path, "outputs", "reports")
+    csv_files = glob.glob(os.path.join(reports_dir, "report_consolidated_*.csv"))
+    if len(csv_files) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Need at least 2 consolidated reports. Run reviews with different models first.",
+        )
+
+    run_id = f"judge_{os.path.basename(run_dir)}_{int(time.time())}"
+
+    emitter = get_emitter()
+    sse = get_sse_backend()
+    if not sse:
+        sse = SSEBackend()
+        emitter.add_backend(sse)
+
+    thread = threading.Thread(target=_run_judge_pipeline, args=(full_path, run_id), daemon=True)
+    thread.start()
+
+    return {"run_id": run_id, "status": "started"}
+
+
+@app.get("/api/judge/results/{run_dir:path}")
+async def get_judge_results(run_dir: str):
+    """Return the latest judge verdicts CSV as JSON."""
+    import pandas as pd
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, run_dir) if not os.path.isabs(run_dir) else run_dir
+    reports_dir = os.path.join(full_path, "outputs", "reports")
+    if not os.path.isdir(reports_dir):
+        return {"verdicts": []}
+    verdict_files = sorted(glob.glob(os.path.join(reports_dir, "JUDGE_VERDICTS_report_*.csv")), reverse=True)
+    if not verdict_files:
+        return {"verdicts": []}
+    try:
+        df = pd.read_csv(verdict_files[0])
+        return {"verdicts": df.fillna("").to_dict(orient="records")}
+    except Exception:
+        return {"verdicts": []}
+
+
+@app.get("/api/judge/status/{run_id}")
+async def judge_status(run_id: str):
+    if run_id in _active_judges:
+        return {"status": "running"}
+    return {"status": "completed"}
 
 
 # ---------------------------------------------------------------------------

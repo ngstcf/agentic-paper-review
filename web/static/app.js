@@ -8,8 +8,8 @@ let currentRunId = null;
 let eventSource = null;
 let runStartTime = null;
 let elapsedInterval = null;
-let sortColumn = null;
-let sortAsc = true;
+let sortColumn = "display_date";
+let sortAsc = false;  // default: newest first
 let promptFiles = [];        // [{filename, content}, ...]
 let currentPromptFilename = "";
 let configDirty = {};        // {key: value} pending saves
@@ -49,6 +49,11 @@ const sourcesSaveBtn = document.getElementById("sources-save-btn");
 const sourcesReloadBtn = document.getElementById("sources-reload-btn");
 const sourcesValidation = document.getElementById("sources-validation");
 const configSaveBtn = document.getElementById("config-save-btn");
+const judgeBtn = document.getElementById("judge-btn");
+const viewVerdictsBtn = document.getElementById("view-verdicts-btn");
+const judgeModal = document.getElementById("judge-modal");
+const judgeModalBody = document.getElementById("judge-modal-body");
+const judgeModalClose = document.getElementById("judge-modal-close");
 
 // ---- Initialization ----
 
@@ -80,6 +85,11 @@ async function init() {
     // Config save
     configSaveBtn.addEventListener("click", saveConfig);
 
+    // Judge
+    judgeBtn.addEventListener("click", startJudge);
+    judgeModalClose.addEventListener("click", () => judgeModal.style.display = "none");
+    if (viewVerdictsBtn) viewVerdictsBtn.addEventListener("click", showJudgeVerdicts);
+
     // Load global resources
     await loadPrompts();
     await loadSources();
@@ -93,6 +103,9 @@ async function init() {
             sortAndRenderResults();
         });
     });
+
+    // Refresh reports button
+    document.getElementById("refresh-reports-btn").addEventListener("click", loadResults);
 }
 
 // ---- API helpers ----
@@ -136,6 +149,7 @@ async function onRunSelected() {
     // Load existing results
     await loadResults();
     await loadReviews();
+    await checkJudgeVerdicts();
 }
 
 // ---- Start / Stop ----
@@ -255,23 +269,25 @@ function handleEvent(evt) {
 function finishRun() {
     startBtn.disabled = false;
     stopBtn.style.display = "none";
+    judgeBtn.disabled = false;
     if (elapsedInterval) clearInterval(elapsedInterval);
     if (eventSource) { eventSource.close(); eventSource = null; }
     loadResults();
+    checkJudgeVerdicts();
 }
 
-// ---- Results Table ----
+// ---- Reports Table ----
 
-let resultsData = [];
+let reportsData = [];
 
 async function loadResults() {
     if (!currentRunDir) return;
     try {
-        const data = await api(`/api/results/${currentRunDir}`);
-        resultsData = data.results || [];
+        const data = await api(`/api/all-reviews/${currentRunDir}`);
+        reportsData = data.reviews || [];
         sortAndRenderResults();
     } catch {
-        resultsData = [];
+        reportsData = [];
         renderResults([]);
     }
 }
@@ -281,10 +297,12 @@ async function loadReviews() {
 }
 
 function sortAndRenderResults() {
-    let sorted = [...resultsData];
+    let sorted = [...reportsData];
     if (sortColumn) {
         sorted.sort((a, b) => {
             let va = a[sortColumn], vb = b[sortColumn];
+            if (va == null) va = "";
+            if (vb == null) vb = "";
             if (typeof va === "string") va = va.toLowerCase();
             if (typeof vb === "string") vb = vb.toLowerCase();
             if (va < vb) return sortAsc ? -1 : 1;
@@ -298,46 +316,44 @@ function sortAndRenderResults() {
 function renderResults(results) {
     resultsTbody.innerHTML = "";
     noResults.style.display = results.length ? "none" : "block";
+    judgeBtn.disabled = results.length === 0;
 
     for (const r of results) {
         const tr = document.createElement("tr");
 
-        const scoreClass = r.overall_score >= 70 ? "score-high" : r.overall_score >= 50 ? "score-mid" : "score-low";
+        const scoreVal = r.overall_score;
+        const scoreClass = scoreVal != null && scoreVal !== "" ? (scoreVal >= 70 ? "score-high" : scoreVal >= 50 ? "score-mid" : "score-low") : "";
         const recClass = getRecClass(r.recommendation);
 
         tr.innerHTML = `
-            <td>${escapeHtml(r.paper_filename || r.title || "")}</td>
-            <td><span class="score-badge ${scoreClass}">${r.overall_score?.toFixed(1) || "-"}</span></td>
+            <td>${escapeHtml(r.paper || "")}</td>
+            <td class="td-date">${escapeHtml(r.display_date || "")}</td>
+            <td class="td-model">${escapeHtml(r.extractor_model || "")}</td>
+            <td class="td-model">${escapeHtml(r.synthesizer_model || "")}</td>
+            <td><span class="score-badge ${scoreClass}">${scoreVal != null && scoreVal !== "" ? Number(scoreVal).toFixed(1) : "-"}</span></td>
             <td><span class="rec-badge ${recClass}">${escapeHtml(r.recommendation || "-")}</span></td>
-            <td>$${r.total_cost_usd?.toFixed(4) || "-"}</td>
-            <td>${r.confidence != null ? (r.confidence * 100).toFixed(0) + "%" : "-"}</td>
-            <td><button class="btn-view" data-paper="${escapeHtml(r.paper_filename || "")}">View</button></td>
+            <td>${r.total_cost != null && r.total_cost !== "" ? "$" + Number(r.total_cost).toFixed(4) : "-"}</td>
+            <td>${r.confidence != null && r.confidence !== "" ? (Number(r.confidence) * 100).toFixed(0) + "%" : "-"}</td>
+            <td><button class="btn-view" data-filename="${escapeHtml(r.filename)}">View</button></td>
         `;
         resultsTbody.appendChild(tr);
     }
 
-    // Attach view handlers
+    // Attach view handlers — direct filename match, no guessing
     resultsTbody.querySelectorAll(".btn-view").forEach(btn => {
-        btn.addEventListener("click", () => showReview(btn.dataset.paper));
+        btn.addEventListener("click", () => showReviewByFilename(btn.dataset.filename));
     });
 }
 
-async function showReview(paperFilename) {
+async function showReviewByFilename(filename) {
     if (!currentRunDir) return;
-    reviewModalTitle.textContent = `Review: ${paperFilename}`;
+    const paperName = filename.split("_20")[0] || filename;
+    reviewModalTitle.textContent = `Review: ${paperName}`;
     reviewModalBody.innerHTML = "Loading...";
 
     try {
-        // Find the review file for this paper
-        const data = await api(`/api/reviews/${currentRunDir}`);
-        const reviews = data.reviews || [];
-        const match = reviews.find(r => r.filename.toLowerCase().includes(paperFilename.toLowerCase()));
-        if (!match) {
-            reviewModalBody.innerHTML = "Review file not found";
-            return;
-        }
-
-        const res = await fetch(`/api/review/${currentRunDir}/${match.filename}`);
+        const res = await fetch(`/api/review/${currentRunDir}/${filename}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = await res.text();
         reviewModalBody.innerHTML = renderMarkdown(text);
         reviewModal.style.display = "flex";
@@ -365,6 +381,8 @@ const stageMap = {
     "Fact-Check": "stage-extraction",
     "Synthesis": "stage-synthesis",
     "Output": "stage-output",
+    "Judge-Compare": "stage-extraction",
+    "Judge-Adjudicate": "stage-synthesis",
 };
 
 function activateStage(name) {
@@ -461,9 +479,9 @@ function switchSidebarTab(tabName) {
 
 // ---- Config Editor ----
 
-const PROVIDER_OPTIONS = ["openai", "anthropic", "deepseek", "google", "mistral", "ollama"];
-const PROVIDER_KEYS = ["PROVIDER_EXTRACTION", "PROVIDER_SYNTHESIS"];
-const NUMBER_KEYS = ["TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS", "MAX_TOKENS_EXTRACTION", "MAX_TOKENS_SYNTHESIS", "EXTRACTION_BATCH_SIZE", "CONCURRENCY"];
+const PROVIDER_OPTIONS = ["openai", "anthropic", "deepseek", "google", "gemini", "mistral", "ollama"];
+const PROVIDER_KEYS = ["PROVIDER_EXTRACTION", "PROVIDER_SYNTHESIS", "JUDGE_PROVIDER"];
+const NUMBER_KEYS = ["TEMPERATURE", "TEMPERATURE_EXTRACTION", "TEMPERATURE_SYNTHESIS", "JUDGE_TEMPERATURE", "MAX_TOKENS_EXTRACTION", "MAX_TOKENS_SYNTHESIS", "EXTRACTION_BATCH_SIZE", "MAX_PARALLEL_EXTRACTIONS", "MAX_RETRIES", "CONCURRENCY"];
 
 async function loadConfig() {
     try {
@@ -510,7 +528,8 @@ function renderConfigEditor(config) {
     // Track changes
     configContent.querySelectorAll(".config-input").forEach(el => {
         el.addEventListener("change", () => {
-            configDirty[el.dataset.key] = el.value;
+            // Always store as string to avoid NaN in JSON
+            configDirty[el.dataset.key] = String(el.value);
             configSaveBtn.style.display = Object.keys(configDirty).length ? "inline-block" : "none";
         });
     });
@@ -688,6 +707,75 @@ async function saveSources() {
 
 async function reloadSources() {
     await loadSources();
+}
+
+// ---- Judge ----
+
+async function checkJudgeVerdicts() {
+    if (!currentRunDir) return;
+    try {
+        const data = await api(`/api/judge/results/${currentRunDir}`);
+        const verdicts = data.verdicts || [];
+        if (viewVerdictsBtn) viewVerdictsBtn.style.display = verdicts.length > 0 ? "inline-block" : "none";
+    } catch {
+        if (viewVerdictsBtn) viewVerdictsBtn.style.display = "none";
+    }
+}
+
+async function startJudge() {
+    if (!currentRunDir) return;
+    judgeBtn.disabled = true;
+    logContent.innerHTML = "";
+    clearStages();
+
+    try {
+        const data = await api(`/api/judge/${currentRunDir}`, { method: "POST" });
+        currentRunId = data.run_id;
+        runStartTime = Date.now();
+        connectSSE();
+        startElapsedTimer();
+        addLog("Judge pipeline started...", "info");
+    } catch (e) {
+        addLog("Judge failed: " + e.message, "error");
+        judgeBtn.disabled = false;
+    }
+}
+
+async function showJudgeVerdicts() {
+    if (!currentRunDir) return;
+    judgeModalBody.innerHTML = "Loading verdicts...";
+
+    try {
+        const data = await api(`/api/judge/results/${currentRunDir}`);
+        const verdicts = data.verdicts || [];
+        if (!verdicts.length) {
+            judgeModalBody.innerHTML = '<p class="placeholder-text">No judge verdicts yet. Run "Compare & Judge" first.</p>';
+            judgeModal.style.display = "flex";
+            return;
+        }
+
+        let html = '<table class="results-table judge-table"><thead><tr>';
+        html += "<th>Paper</th><th>Judge Decision</th><th>Winner</th><th>Rationale</th><th>Cost</th>";
+        html += "</tr></thead><tbody>";
+
+        for (const v of verdicts) {
+            const winClass = v.winning_review === "A" ? "rec-accept" :
+                             v.winning_review === "B" ? "rec-reject" : "rec-revision";
+            html += "<tr>";
+            html += `<td>${escapeHtml(v.paper_filename || "")}</td>`;
+            html += `<td><span class="rec-badge rec-revision">${escapeHtml(v.judge_recommendation || "")}</span></td>`;
+            html += `<td><span class="rec-badge ${winClass}">${escapeHtml(v.winning_review || "")}</span></td>`;
+            html += `<td>${escapeHtml(v.judge_rationale || "")}</td>`;
+            html += `<td>$${parseFloat(v.judge_cost || 0).toFixed(4)}</td>`;
+            html += "</tr>";
+        }
+
+        html += "</tbody></table>";
+        judgeModalBody.innerHTML = html;
+        judgeModal.style.display = "flex";
+    } catch (e) {
+        judgeModalBody.innerHTML = "Error: " + e.message;
+    }
 }
 
 // Init

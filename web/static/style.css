@@ -76,6 +76,59 @@ body {
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { background: #dc2626; }
 
+.btn-warning {
+    background: #f59e0b;
+    color: #000;
+}
+.btn-warning:hover:not(:disabled) { background: #d97706; }
+.btn-warning:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-sm { padding: 4px 12px; font-size: 11px; }
+
+.results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.results-header h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.results-header-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* Judge verdicts table */
+.judge-table td {
+    font-size: 12px;
+    vertical-align: top;
+}
+
+.judge-table td:nth-child(4) {
+    max-width: 300px;
+    line-height: 1.4;
+}
+
+.rec-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.rec-accept { background: rgba(34,197,94,0.15); color: var(--success); }
+.rec-revision { background: rgba(245,158,11,0.15); color: var(--warning); }
+.rec-resubmit { background: rgba(249,115,22,0.15); color: #f97316; }
+.rec-reject { background: rgba(239,68,68,0.15); color: var(--danger); }
+
 /* Layout */
 .main-content {
     display: flex;
@@ -608,6 +661,20 @@ body {
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 13px;
+}
+
+.td-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.td-model {
+    font-size: 11px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Responsive */

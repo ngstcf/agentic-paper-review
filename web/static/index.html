@@ -135,17 +135,27 @@
                 </div>
             </section>
 
-            <!-- Results Table -->
+            <!-- Reports Table -->
             <section class="results-panel">
-                <h2>Results</h2>
+                <div class="results-header">
+                    <h2>Reports</h2>
+                    <div class="results-header-actions">
+                        <button id="refresh-reports-btn" class="btn btn-sm btn-secondary">Refresh</button>
+                        <button id="judge-btn" class="btn btn-sm btn-warning" disabled>Compare &amp; Judge</button>
+                        <button id="view-verdicts-btn" class="btn btn-sm btn-secondary" style="display:none">View Verdicts</button>
+                    </div>
+                </div>
                 <div id="results-table-container">
                     <table id="results-table" class="results-table">
                         <thead>
                             <tr>
-                                <th data-sort="paper_filename">Paper</th>
+                                <th data-sort="paper">Paper</th>
+                                <th data-sort="display_date">Date</th>
+                                <th data-sort="extractor_model">Extractor</th>
+                                <th data-sort="synthesizer_model">Synthesizer</th>
                                 <th data-sort="overall_score">Score</th>
                                 <th data-sort="recommendation">Recommendation</th>
-                                <th data-sort="total_cost_usd">Cost</th>
+                                <th data-sort="total_cost">Cost</th>
                                 <th data-sort="confidence">Confidence</th>
                                 <th>Review</th>
                             </tr>
@@ -153,7 +163,7 @@
                         <tbody id="results-tbody">
                         </tbody>
                     </table>
-                    <p id="no-results" class="placeholder-text">No results yet</p>
+                    <p id="no-results" class="placeholder-text">No reports yet</p>
                 </div>
             </section>
 
@@ -165,6 +175,17 @@
                         <button class="modal-close" id="review-modal-close">&times;</button>
                     </div>
                     <div id="review-modal-body" class="review-body"></div>
+                </div>
+            </div>
+
+            <!-- Judge Verdicts Modal -->
+            <div id="judge-modal" class="modal" style="display:none">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Judge Verdicts</h3>
+                        <button class="modal-close" id="judge-modal-close">&times;</button>
+                    </div>
+                    <div id="judge-modal-body" class="review-body"></div>
                 </div>
             </div>
         </div>
