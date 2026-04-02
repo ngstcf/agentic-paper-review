@@ -47,6 +47,33 @@ _run_history: List[Dict[str, Any]] = []
 _cancel_flags: Dict[str, bool] = {}
 
 
+def _load_progress(progress_file: str, current_config_hash: str, mode: str) -> Dict[str, Dict]:
+    """Load progress file, resetting if config or mode changed."""
+    if not os.path.exists(progress_file):
+        return {"papers": {}}
+    try:
+        with open(progress_file, "r") as f:
+            progress_data = json.load(f)
+        stored_mode = progress_data.get("mode", "standard")  # CLI doesn't store mode
+        if progress_data.get("config_hash") != current_config_hash or stored_mode != mode:
+            return {"papers": {}}
+        return progress_data
+    except (json.JSONDecodeError, KeyError):
+        return {"papers": {}}
+
+
+def _save_progress(progress_file: str, progress: Dict[str, Dict], config_hash: str, mode: str):
+    """Save progress file with config hash and mode."""
+    progress_data = {
+        "config_hash": config_hash,
+        "mode": mode,
+        "papers": progress,
+        "last_updated": datetime.now().isoformat(),
+    }
+    with open(progress_file, "w") as f:
+        json.dump(progress_data, f, indent=2, default=str)
+
+
 def _find_run_dirs() -> List[Dict[str, str]]:
     """Scan for run directories at the project root."""
     root = os.path.dirname(os.path.abspath(__file__))
@@ -185,6 +212,11 @@ def _run_pipeline(run_dir: str, run_id: str, mode: str, config_overrides: Dict[s
         config = Config(config_path=dirs["input_dir"])
         config_hash = get_config_hash(config)
 
+        # Load progress for idempotent resume
+        progress_file = os.path.join(run_dir, "progress.json")
+        progress_data = _load_progress(progress_file, config_hash, mode)
+        progress_papers = progress_data.get("papers", {})
+
         # Ingest papers
         cache_file = os.path.join(run_dir, "ingestion_cache.json")
         ingestion_cache = load_ingestion_cache(cache_file)
@@ -226,6 +258,35 @@ def _run_pipeline(run_dir: str, run_id: str, mode: str, config_overrides: Dict[s
             if _cancel_flags.get(run_id, False):
                 emitter.emit(Event(event_type="error", stage_name="cancel", message="Run cancelled by user", recoverable=True))
                 break
+
+            # Skip already-processed papers (idempotent resume)
+            if paper.filename in progress_papers:
+                review_data = progress_papers[paper.filename]["review"]
+                if mode == "literature":
+                    from core.data_models import GroundedReview
+                    review = GroundedReview.model_validate(review_data)
+                else:
+                    from core.data_models import Review
+                    review = Review.model_validate(review_data)
+                final_reviews.append(review)
+                paper_cost = progress_papers[paper.filename].get("cost", 0.0)
+                total_cost += paper_cost
+
+                emitter.emit(PaperCompleted(
+                    paper_filename=paper.filename,
+                    score=review.overall_score,
+                    recommendation=review.recommendation,
+                    cost=paper_cost,
+                    duration_s=0.0,
+                ))
+                elapsed = time.time() - start_time
+                est_remaining = (elapsed / i * (len(papers) - i)) if i > 0 else 0
+                emitter.emit(RunProgress(
+                    papers_done=i, papers_total=len(papers),
+                    elapsed_s=elapsed, estimated_remaining_s=est_remaining,
+                ))
+                emitter.emit(CostUpdate(paper_cost=paper_cost, total_cost=total_cost))
+                continue
 
             paper_start = time.time()
 
@@ -322,6 +383,14 @@ def _run_pipeline(run_dir: str, run_id: str, mode: str, config_overrides: Dict[s
             emitter.emit(CostUpdate(paper_cost=review.total_cost, total_cost=total_cost))
 
             final_reviews.append(review)
+
+            # Save progress for idempotent resume
+            progress_papers[paper.filename] = {
+                "review": review.model_dump(),
+                "cost": review.total_cost,
+                "timestamp": datetime.now().isoformat(),
+            }
+            _save_progress(progress_file, progress_papers, config_hash, mode)
 
         # Save consolidated CSV
         if final_reviews:

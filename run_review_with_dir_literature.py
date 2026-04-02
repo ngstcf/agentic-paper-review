@@ -514,9 +514,9 @@ def main():
         # Skip if already processed with current configuration
         if paper.filename in progress_papers:
             print(f"\n⏭️  [{i}/{len(papers)}] Skipping: {paper.filename} (already processed)", flush=True)
-            # Convert the dict back to a Review object
+            # Convert the dict back to a GroundedReview object
             review_data = progress_papers[paper.filename]["review"]
-            review = Review.model_validate(review_data)
+            review = GroundedReview.model_validate(review_data)
             final_reviews.append(review)
             
             # Add to cached cost (not new processing cost)
