@@ -47,12 +47,24 @@ pip install -r requirements.txt
 
 ### Configure API Keys
 
-Create a `.env` file at the project root:
+Create a `.env` file at the project root (see `.env_example` for all options):
 
 ```env
 OPENAI_API_KEY=sk-...
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_API_BASE=https://api.deepseek.com/v1
+GEMINI_API_KEY=AIza...
+ANTHROPIC_API_KEY=sk-ant-...
 CUSTOM_OPENAI_API_KEY=your-key
 CUSTOM_OPENAI_API_BASE=http://your-server:port/v1
+
+# Model selection (swap freely — any model supported by litellm)
+PROVIDER_EXTRACTION=deepseek
+EXTRACTOR_MODEL=deepseek-v4-flash
+PROVIDER_SYNTHESIS=deepseek
+SYNTHESIZER_MODEL=deepseek-v4-flash
+JUDGE_PROVIDER=gemini
+JUDGE_MODEL=gemini-3.1-flash-lite
 ```
 
 ### Run Your First Review
@@ -67,9 +79,9 @@ python setup_run.py --run-dir my_review_run
 python run_with_custom_params.py \
   --run-dir my_review_run \
   --provider-extraction deepseek \
-  --extractor-model deepseek-reasoner \
+  --extractor-model deepseek-v4-flash \
   --provider-synthesis openai \
-  --synthesizer-model gpt-4o-mini
+  --synthesizer-model gpt-5.4-mini
 ```
 
 Results appear in `my_review_run/outputs/reviews/` (individual reviews) and `my_review_run/outputs/reports/` (consolidated CSV).
@@ -88,12 +100,12 @@ python run_review_with_dir_literature.py \
 ```bash
 # Step 1: Run with different models (repeat with different flags)
 python run_with_custom_params.py --run-dir my_review_run \
-  --provider-extraction openai --extractor-model gpt-4o-mini \
-  --provider-synthesis openai --synthesizer-model gpt-4o-mini
+  --provider-extraction openai --extractor-model gpt-5.4-mini \
+  --provider-synthesis openai --synthesizer-model gpt-5.4-mini
 
 python run_with_custom_params.py --run-dir my_review_run \
-  --provider-extraction deepseek --extractor-model deepseek-reasoner \
-  --provider-synthesis deepseek --synthesizer-model deepseek-chat
+  --provider-extraction deepseek --extractor-model deepseek-v4-flash \
+  --provider-synthesis deepseek --synthesizer-model deepseek-v4-flash
 
 # Step 2: Find conflicts
 python compare_reports.py --run-dir my_review_run
@@ -209,16 +221,18 @@ The system tracks progress per directory and resumes automatically after interru
 
 ## Supported LLM Providers
 
+All models are configurable via `.env` — no code changes needed when providers release new models.
+
 | Provider | Example Models |
 |----------|---------------|
-| OpenAI | GPT-5, GPT-4o, GPT-4o-mini |
-| Gemini | gemini-2.5-flash, gemini-2.5-pro |
-| DeepSeek | deepseek-chat, deepseek-reasoner |
-| Claude | claude-opus-4, claude-sonnet-4, claude-haiku-4.5 |
+| OpenAI | gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano |
+| DeepSeek | deepseek-v4-pro, deepseek-v4-flash |
+| Gemini | gemini-3.5-flash, gemini-3.1-flash-lite |
+| Anthropic | claude-opus-4-8, claude-sonnet-4-6, claude-haiku-4-5 |
 | Perplexity | sonar, sonar-pro |
-| Ollama | Any local model via API |
+| Custom/Ollama | Any OpenAI-compatible endpoint via `CUSTOM_OPENAI_API_BASE` |
 
-You can mix providers — e.g., DeepSeek for extraction, OpenAI for synthesis.
+You can mix providers — e.g., DeepSeek for extraction, Gemini for judge, OpenAI for synthesis. Token limits are auto-detected via litellm; override per-role with `MAX_TOKENS_EXTRACTION`, `MAX_TOKENS_SYNTHESIS`, `MAX_TOKENS_JUDGE` in `.env`.
 
 ## Literature Sources
 
@@ -234,8 +248,9 @@ Configured in `config/literature_sources.yaml`:
 
 | Issue | Fix |
 |-------|-----|
-| `FAILED criterion` / JSON error | Increase `max_tokens` in `core/llm_wrapper.py` (e.g., 4096 to 8192) |
-| `Unsupported parameter: max_tokens` | Known issue with some endpoints; add a bypass rule in `core/llm_wrapper.py` |
+| `FAILED criterion` / JSON error | Set `MAX_TOKENS_EXTRACTION=32768` in `.env` to increase output limit |
+| `Unsupported parameter: max_tokens` | Known issue with some endpoints; the custom_openai bypass handles this automatically |
+| `model isn't mapped yet` | Add the model to `_EXTRA_MODELS` in `core/llm_wrapper.py` or set the provider's `*_API_BASE` env var |
 | Re-parse papers | Delete `ingestion_cache.json` |
 | Re-review papers | Delete `progress.json` |
 | Re-adjudicate | Delete `judge_progress.json` |
