@@ -103,7 +103,8 @@ def synthesize_review(
         provider=llm_config['synthesizer_provider'],
         model=llm_config['synthesizer_model'],
         temperature=llm_config['temperature'],
-        max_retries=llm_config['max_retries']
+        max_retries=llm_config['max_retries'],
+        role="synthesis"
     )
     
     if not response['success']:

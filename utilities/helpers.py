@@ -5,7 +5,7 @@ import hashlib
 import json
 import yaml
 from typing import Dict, Any
-from core.config_loader import Config
+from core.config_loader import Config, MODEL_DEFAULTS
 
 
 def setup_logging():
@@ -60,8 +60,8 @@ def get_config_hash(config: 'Config') -> str:
 def get_judge_config_hash() -> str:
     """Generate a hash of the Judge LLM configuration."""
     judge_config = {
-        "provider": os.environ.get("JUDGE_PROVIDER", "openai"),
-        "model": os.environ.get("JUDGE_MODEL", "gpt-4o"),
+        "provider": os.environ.get("JUDGE_PROVIDER", MODEL_DEFAULTS["judge_provider"]),
+        "model": os.environ.get("JUDGE_MODEL", MODEL_DEFAULTS["judge_model"]),
         "temperature": float(os.environ.get("JUDGE_TEMPERATURE", 0.1))
     }
 

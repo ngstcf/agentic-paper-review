@@ -61,7 +61,8 @@ Return your answer as a JSON object:
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
         temperature=config.get_agent_config()['librarian_temperature'],
-        max_retries=config.get_llm_config()['max_retries']
+        max_retries=config.get_llm_config()['max_retries'],
+        role="extraction"
     )
 
     if not response['success']:
@@ -125,7 +126,8 @@ Return your answer as a JSON object:
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
         temperature=config.get_agent_config()['librarian_temperature'],
-        max_retries=config.get_llm_config()['max_retries']
+        max_retries=config.get_llm_config()['max_retries'],
+        role="extraction"
     )
 
     if not response['success']:
@@ -507,7 +509,8 @@ This summary will help readers understand where new papers fit in the research t
         provider=config.get_llm_config()['extractor_provider'],
         model=config.get_llm_config()['extractor_model'],
         temperature=config.get_agent_config()['librarian_summary_temperature'],
-        max_retries=config.get_llm_config()['max_retries']
+        max_retries=config.get_llm_config()['max_retries'],
+        role="extraction"
     )
 
     if not response['success']:

@@ -332,7 +332,8 @@ Write in clear, academic prose suitable for inclusion in a peer review.
         provider=config.get_llm_config()['synthesizer_provider'],
         model=config.get_llm_config()['synthesizer_model'],
         temperature=config.get_agent_config()['critic_temperature'],
-        max_retries=2
+        max_retries=2,
+        role="synthesis"
     )
 
     if response['success']:
@@ -575,7 +576,8 @@ When writing your review, consider how the paper's claims relate to this literat
             model=llm_config['synthesizer_model'],
             temperature=llm_config['temperature'],
             max_retries=llm_config['max_retries'],
-            response_format="json"
+            response_format="json",
+            role="synthesis"
         )
 
         if not response['success']:

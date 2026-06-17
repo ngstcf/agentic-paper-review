@@ -149,7 +149,8 @@ Return ONLY the search query, no explanation.
         provider=extraction.model_used.split('/')[0],
         model=extraction.model_used.split('/')[-1],
         temperature=0.3,
-        max_retries=2
+        max_retries=2,
+        role="extraction"
     )
 
     if response['success']:

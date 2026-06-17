@@ -59,7 +59,8 @@ def extract_criterion_evidence(
         provider=llm_config['extractor_provider'],
         model=llm_config['extractor_model'],
         temperature=llm_config['temperature'],
-        max_retries=llm_config['max_retries']
+        max_retries=llm_config['max_retries'],
+        role="extraction"
     )
     
     if not response['success']:

@@ -4,6 +4,15 @@ import os
 from dotenv import load_dotenv
 from typing import Dict, Any, List
 
+MODEL_DEFAULTS = {
+    "extractor_provider": "openai",
+    "extractor_model": "gpt-5.4-mini",
+    "synthesizer_provider": "openai",
+    "synthesizer_model": "gpt-5.4-mini",
+    "judge_provider": "deepseek",
+    "judge_model": "deepseek-v4-pro",
+}
+
 # --- ADD DEFAULT THRESHOLDS AS A FALLBACK ---
 DEFAULT_THRESHOLDS = [
     {'threshold': 85, 'label': "Accept"},
@@ -85,16 +94,16 @@ class Config:
 
     def get_llm_config(self) -> Dict[str, Any]:
         return {
-            "extractor_provider": self.get_env("PROVIDER_EXTRACTION", "openai"),
-            "extractor_model": self.get_env("EXTRACTOR_MODEL", "gpt-4o-mini"),
-            "synthesizer_provider": self.get_env("PROVIDER_SYNTHESIS", "openai"),
-            "synthesizer_model": self.get_env("SYNTHESIZER_MODEL", "gpt-4o"),
+            "extractor_provider": self.get_env("PROVIDER_EXTRACTION", MODEL_DEFAULTS["extractor_provider"]),
+            "extractor_model": self.get_env("EXTRACTOR_MODEL", MODEL_DEFAULTS["extractor_model"]),
+            "synthesizer_provider": self.get_env("PROVIDER_SYNTHESIS", MODEL_DEFAULTS["synthesizer_provider"]),
+            "synthesizer_model": self.get_env("SYNTHESIZER_MODEL", MODEL_DEFAULTS["synthesizer_model"]),
             "temperature": float(self.get_env("TEMPERATURE", 0.2)),
             "max_retries": int(self.get_env("MAX_RETRIES", 3)),
             "max_parallel": int(self.get_env("MAX_PARALLEL_EXTRACTIONS", 5)),
-            "judge_provider": self.get_env("JUDGE_PROVIDER", "deepseek"),
-            "judge_model": self.get_env("JUDGE_MODEL", "deepseek-reasoner"),
-            "judge_temperature": self.get_env("JUDGE_TEMPERATURE",0.1)
+            "judge_provider": self.get_env("JUDGE_PROVIDER", MODEL_DEFAULTS["judge_provider"]),
+            "judge_model": self.get_env("JUDGE_MODEL", MODEL_DEFAULTS["judge_model"]),
+            "judge_temperature": self.get_env("JUDGE_TEMPERATURE", 0.1)
         }
 
     def get_agent_config(self) -> Dict[str, Any]:
@@ -108,17 +117,6 @@ class Config:
             "librarian_retry_delay": float(self.get_env("LIBRARIAN_RETRY_DELAY", 2.0)),
             "critic_max_json_retries": int(self.get_env("CRITIC_MAX_JSON_RETRIES", 3)),
             "fact_checker_max_retries": int(self.get_env("FACT_CHECKER_MAX_RETRIES", 2)),
-        }
-
-    def get_token_limits(self) -> Dict[str, int]:
-        """Return model-specific token limits from env."""
-        return {
-            "gpt4o": int(self.get_env("TOKEN_LIMIT_GPT4O", 16384)),
-            "gpt4": int(self.get_env("TOKEN_LIMIT_GPT4", 4096)),
-            "reasoner": int(self.get_env("TOKEN_LIMIT_REASONER", 32768)),
-            "gemini": int(self.get_env("TOKEN_LIMIT_GEMINI", 32768)),
-            "default": int(self.get_env("TOKEN_LIMIT_DEFAULT", 8192)),
-            "custom_openai": int(self.get_env("TOKEN_LIMIT_CUSTOM_OPENAI", 16384)),
         }
 
     def get_timeout_config(self) -> Dict[str, Any]:

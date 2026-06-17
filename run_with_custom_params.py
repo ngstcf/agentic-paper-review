@@ -6,6 +6,7 @@ import subprocess
 import time
 import json
 from datetime import datetime
+from core.config_loader import MODEL_DEFAULTS
 
 def main():
     parser = argparse.ArgumentParser(
@@ -146,15 +147,15 @@ def main():
         
         # Write parameters in a specific order to avoid duplicates
         parameters_to_write = [
-            ("PROVIDER_EXTRACTION", env_vars.get("PROVIDER_EXTRACTION", "openai")),
-            ("EXTRACTOR_MODEL", env_vars.get("EXTRACTOR_MODEL", "gpt-4o-mini")),
-            ("PROVIDER_SYNTHESIS", env_vars.get("PROVIDER_SYNTHESIS", "openai")),
-            ("SYNTHESIZER_MODEL", env_vars.get("SYNTHESIZER_MODEL", "gpt-4o")),
+            ("PROVIDER_EXTRACTION", env_vars.get("PROVIDER_EXTRACTION", MODEL_DEFAULTS["extractor_provider"])),
+            ("EXTRACTOR_MODEL", env_vars.get("EXTRACTOR_MODEL", MODEL_DEFAULTS["extractor_model"])),
+            ("PROVIDER_SYNTHESIS", env_vars.get("PROVIDER_SYNTHESIS", MODEL_DEFAULTS["synthesizer_provider"])),
+            ("SYNTHESIZER_MODEL", env_vars.get("SYNTHESIZER_MODEL", MODEL_DEFAULTS["synthesizer_model"])),
             ("TEMPERATURE", env_vars.get("TEMPERATURE", "0.2")),
             ("MAX_RETRIES", env_vars.get("MAX_RETRIES", "3")),
             ("MAX_PARALLEL_EXTRACTIONS", env_vars.get("MAX_PARALLEL_EXTRACTIONS", "5")),
-            ("JUDGE_PROVIDER", env_vars.get("JUDGE_PROVIDER", "openai")),
-            ("JUDGE_MODEL", env_vars.get("JUDGE_MODEL", "gpt-4o")),
+            ("JUDGE_PROVIDER", env_vars.get("JUDGE_PROVIDER", MODEL_DEFAULTS["judge_provider"])),
+            ("JUDGE_MODEL", env_vars.get("JUDGE_MODEL", MODEL_DEFAULTS["judge_model"])),
             ("JUDGE_TEMPERATURE", env_vars.get("JUDGE_TEMPERATURE", "0.1"))
         ]
         
@@ -184,14 +185,14 @@ def main():
     
     # Display current configuration
     print("\n🎯 Current LLM Configuration:")
-    print(f"   Extraction: {env_vars.get('PROVIDER_EXTRACTION', 'openai')}/{env_vars.get('EXTRACTOR_MODEL', 'gpt-4o-mini')}")
-    print(f"   Synthesis:  {env_vars.get('PROVIDER_SYNTHESIS', 'openai')}/{env_vars.get('SYNTHESIZER_MODEL', 'gpt-4o')}")
+    print(f"   Extraction: {env_vars.get('PROVIDER_EXTRACTION', MODEL_DEFAULTS['extractor_provider'])}/{env_vars.get('EXTRACTOR_MODEL', MODEL_DEFAULTS['extractor_model'])}")
+    print(f"   Synthesis:  {env_vars.get('PROVIDER_SYNTHESIS', MODEL_DEFAULTS['synthesizer_provider'])}/{env_vars.get('SYNTHESIZER_MODEL', MODEL_DEFAULTS['synthesizer_model'])}")
     print(f"   Temperature: {env_vars.get('TEMPERATURE', '0.2')}")
     print(f"   Max Retries: {env_vars.get('MAX_RETRIES', '3')}")
     print(f"   Max Parallel: {env_vars.get('MAX_PARALLEL_EXTRACTIONS', '5')}")
     
     if env_vars.get('JUDGE_PROVIDER') or env_vars.get('JUDGE_MODEL'):
-        print(f"   Judge: {env_vars.get('JUDGE_PROVIDER', 'openai')}/{env_vars.get('JUDGE_MODEL', 'gpt-4o')}")
+        print(f"   Judge: {env_vars.get('JUDGE_PROVIDER', MODEL_DEFAULTS['judge_provider'])}/{env_vars.get('JUDGE_MODEL', MODEL_DEFAULTS['judge_model'])}")
         print(f"   Judge Temperature: {env_vars.get('JUDGE_TEMPERATURE', '0.1')}")
     
     # Check if papers exist

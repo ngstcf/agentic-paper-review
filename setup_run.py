@@ -3,6 +3,7 @@ import os
 import shutil
 import argparse
 from pathlib import Path
+from core.config_loader import MODEL_DEFAULTS
 
 def setup_run_directory(run_dir: str, config_dir: str = "config"):
     """Set up a new run directory with the required structure."""
@@ -35,18 +36,18 @@ def setup_run_directory(run_dir: str, config_dir: str = "config"):
         env_file = input_dir / ".env"
         if not env_file.exists():
             with open(env_file, "w") as f:
-                f.write("""# LLM Configuration Parameters
+                f.write(f"""# LLM Configuration Parameters
 # ======================================
 # API keys are loaded from the global .env file at the project root
 # ======================================
 
 # Extraction Configuration
-PROVIDER_EXTRACTION=openai
-EXTRACTOR_MODEL=gpt-4o-mini
+PROVIDER_EXTRACTION={MODEL_DEFAULTS["extractor_provider"]}
+EXTRACTOR_MODEL={MODEL_DEFAULTS["extractor_model"]}
 
 # Synthesis Configuration
-PROVIDER_SYNTHESIS=deepseek
-SYNTHESIZER_MODEL=deepseek-reasoner
+PROVIDER_SYNTHESIS={MODEL_DEFAULTS["synthesizer_provider"]}
+SYNTHESIZER_MODEL={MODEL_DEFAULTS["synthesizer_model"]}
 
 # General Parameters
 TEMPERATURE=0.2
@@ -54,8 +55,8 @@ MAX_RETRIES=3
 MAX_PARALLEL_EXTRACTIONS=5
 
 # Judge Configuration
-JUDGE_PROVIDER=google
-JUDGE_MODEL=gemini-2.5-flash
+JUDGE_PROVIDER={MODEL_DEFAULTS["judge_provider"]}
+JUDGE_MODEL={MODEL_DEFAULTS["judge_model"]}
 JUDGE_TEMPERATURE=0.1
 """)
     else:

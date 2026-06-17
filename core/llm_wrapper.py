@@ -21,7 +21,49 @@ litellm.verify_ssl = False
 requests.packages.urllib3.disable_warnings() # Disable warnings for verify=False
 
 # This is CRITICAL for all other calls
-litellm.drop_params = True 
+litellm.drop_params = True
+
+# Register models that litellm doesn't know yet (new releases ahead of litellm updates)
+_EXTRA_MODELS = {
+    "deepseek/deepseek-v4-flash": {
+        "max_tokens": 16384, "max_input_tokens": 1000000, "max_output_tokens": 384000,
+        "input_cost_per_token": 0, "output_cost_per_token": 0, "litellm_provider": "deepseek",
+    },
+    "deepseek/deepseek-v4-pro": {
+        "max_tokens": 16384, "max_input_tokens": 1000000, "max_output_tokens": 384000,
+        "input_cost_per_token": 0, "output_cost_per_token": 0, "litellm_provider": "deepseek",
+    },
+}
+try:
+    litellm.register_model(_EXTRA_MODELS)
+except Exception:
+    pass
+
+def resolve_max_tokens(provider: str, model: str, role: Optional[str] = None) -> int:
+    """
+    3-layer token resolution:
+    1. Per-role env override (MAX_TOKENS_EXTRACTION, MAX_TOKENS_SYNTHESIS, MAX_TOKENS_JUDGE)
+    2. litellm registry auto-detection
+    3. TOKEN_LIMIT_DEFAULT fallback
+    """
+    default_fallback = int(os.environ.get("TOKEN_LIMIT_DEFAULT", 16384))
+
+    if role:
+        env_key = f"MAX_TOKENS_{role.upper()}"
+        env_val = os.environ.get(env_key)
+        if env_val:
+            return int(env_val)
+
+    model_string = f"{provider.strip()}/{model.strip()}"
+    try:
+        litellm_max = litellm.get_max_tokens(model_string)
+        if litellm_max and litellm_max > 0:
+            return litellm_max
+    except Exception:
+        pass
+
+    return default_fallback
+
 
 def _call_custom_ollama_bypass(
     system_prompt: str,
@@ -58,8 +100,8 @@ def _call_custom_ollama_bypass(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 1.0,               # Rule 1
-        "max_completion_tokens": 16384,   # Rule 2 - Increased for longer reviews
+        "temperature": 1.0,
+        "max_completion_tokens": resolve_max_tokens("custom_openai", model),
         "stream": False
         # 'max_tokens' is (correctly) NOT included
     }
@@ -113,7 +155,8 @@ def call_llm(
     temperature: float,
     max_retries: int,
     response_format: Optional[str] = None,
-    config: Optional[Any] = None
+    config: Optional[Any] = None,
+    role: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Unified LLM API call with retry logic, cost calculation,
@@ -142,44 +185,12 @@ def call_llm(
     # ---
     #print(f"[LLM_Wrapper_V8_DEBUG] ---> No bypass. Proceeding with standard litellm call.")
     
-    # 1. Start with standard params
-    # Use higher max_tokens for newer models with larger context windows
-    # deepseek-reasoner: up to 128k output tokens
-    # gemini-2.5: up to 1M output tokens
-    # gpt-4o: 16k output tokens
-    # gpt-4-turbo: 4k output tokens
     provider_lower = provider.strip().lower()
-    model_lower = model.strip().lower()
-
-    # Set token limits based on model capabilities
-    # Must check more specific models first (gpt-4o before gpt-4)
-    if config is not None:
-        token_limits = config.get_token_limits()
-        if "gpt-4o" in model_lower:
-            max_tokens_limit = token_limits["gpt4o"]
-        elif "gpt-4" in model_lower:
-            max_tokens_limit = token_limits["gpt4"]
-        elif "reasoner" in model_lower:
-            max_tokens_limit = token_limits["reasoner"]
-        elif "gemini-2.5" in model_lower:
-            max_tokens_limit = token_limits["gemini"]
-        else:
-            max_tokens_limit = token_limits["default"]
-    else:
-        if "gpt-4o" in model_lower:
-            max_tokens_limit = 16384  # gpt-4o and gpt-4o-mini support 16k
-        elif "gpt-4" in model_lower:
-            max_tokens_limit = 4096  # gpt-4 and gpt-4-turbo support 4k
-        elif "reasoner" in model_lower:
-            max_tokens_limit = 32768  # deepseek-reasoner supports up to 128k
-        elif "gemini-2.5" in model_lower:
-            max_tokens_limit = 32768  # gemini 2.5 supports high output
-        else:
-            max_tokens_limit = 8192  # Standard limit for other models
+    max_tokens_limit = resolve_max_tokens(provider, model, role)
 
     params = {
         "num_retries": max_retries,
-        "timeout": config.get_timeout_config()["llm_timeout"] if config is not None else 300,
+        "timeout": int(os.environ.get("LLM_TIMEOUT", 300)),
         "temperature": temperature,
         "max_tokens": max_tokens_limit
     }

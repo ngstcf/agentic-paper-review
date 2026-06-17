@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.WARNING)
 logging.getLogger("litellm").setLevel(logging.WARNING)
 
-from core.config_loader import Config
+from core.config_loader import Config, MODEL_DEFAULTS
 from core.paper_ingestor import (
     load_ingestion_cache, 
     save_ingestion_cache, 
@@ -119,18 +119,18 @@ def setup_run_directory(run_dir: str) -> Dict[str, str]:
         env_file = input_dir / ".env"
         if not env_file.exists():
             with open(env_file, "w") as f:
-                f.write("""# LLM Configuration
-PROVIDER_EXTRACTION=openai
-EXTRACTOR_MODEL=gpt-4o-mini
-PROVIDER_SYNTHESIS=openai
-SYNTHESIZER_MODEL=gpt-4o
+                f.write(f"""# LLM Configuration
+PROVIDER_EXTRACTION={MODEL_DEFAULTS["extractor_provider"]}
+EXTRACTOR_MODEL={MODEL_DEFAULTS["extractor_model"]}
+PROVIDER_SYNTHESIS={MODEL_DEFAULTS["synthesizer_provider"]}
+SYNTHESIZER_MODEL={MODEL_DEFAULTS["synthesizer_model"]}
 TEMPERATURE=0.2
 MAX_RETRIES=3
 MAX_PARALLEL_EXTRACTIONS=5
 
 # Judge Configuration
-JUDGE_PROVIDER=openai
-JUDGE_MODEL=gpt-4o
+JUDGE_PROVIDER={MODEL_DEFAULTS["judge_provider"]}
+JUDGE_MODEL={MODEL_DEFAULTS["judge_model"]}
 JUDGE_TEMPERATURE=0.1
 """)
     

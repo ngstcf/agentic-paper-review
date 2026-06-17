@@ -4,7 +4,7 @@ import glob
 import json
 from datetime import datetime
 from core.llm_wrapper import call_llm
-from core.config_loader import Config
+from core.config_loader import Config, MODEL_DEFAULTS
 from utilities.helpers import sanitize_model_name, get_judge_config_hash
 from core.paper_ingestor import load_ingestion_cache
 
@@ -12,8 +12,8 @@ from core.paper_ingestor import load_ingestion_cache
 CONFLICT_COLUMN = "recommendation" # The column to check for conflicts
 
 # --- LLM-as-a-Judge Settings ---
-JUDGE_PROVIDER = os.environ.get("JUDGE_PROVIDER", "openai")
-JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gpt-4o")
+JUDGE_PROVIDER = os.environ.get("JUDGE_PROVIDER", MODEL_DEFAULTS["judge_provider"])
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", MODEL_DEFAULTS["judge_model"])
 JUDGE_TEMPERATURE = 0.1
 
 # The prompt for the Judge LLM
@@ -151,7 +151,8 @@ def run_judge(paper_content: str, review_a_row: pd.Series, review_b_row: pd.Seri
         provider=JUDGE_PROVIDER,
         model=JUDGE_MODEL,
         temperature=JUDGE_TEMPERATURE,
-        max_retries=llm_config['max_retries']
+        max_retries=llm_config['max_retries'],
+        role="judge"
     )
     
     if not response['success']:

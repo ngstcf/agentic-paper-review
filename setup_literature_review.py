@@ -3,6 +3,7 @@ import os
 import shutil
 import argparse
 from pathlib import Path
+from core.config_loader import MODEL_DEFAULTS
 
 def setup_literature_run_directory(run_dir: str, config_dir: str = "config"):
     """Set up a new literature-grounded review run directory with the required structure.
@@ -66,23 +67,23 @@ def setup_literature_run_directory(run_dir: str, config_dir: str = "config"):
 # ======================================
 
 # Stage 1: Librarian (Baseline Reference Creation)
-PROVIDER_LIBRARIAN=openai
-LIBRARIAN_MODEL=gpt-4o
+PROVIDER_LIBRARIAN={MODEL_DEFAULTS["synthesizer_provider"]}
+LIBRARIAN_MODEL={MODEL_DEFAULTS["synthesizer_model"]}
 LIBRARIAN_TEMPERATURE=0.2
 
 # Stage 2: Reader (Novelty Ranking & Extraction)
-PROVIDER_READER=openai
-READER_MODEL=gpt-4o-mini
+PROVIDER_READER={MODEL_DEFAULTS["extractor_provider"]}
+READER_MODEL={MODEL_DEFAULTS["extractor_model"]}
 READER_TEMPERATURE=0.3
 
 # Stage 3: Fact-Checker (Claim Verification)
-PROVIDER_FACT_CHECKER=openai
-FACT_CHECKER_MODEL=gpt-4o
+PROVIDER_FACT_CHECKER={MODEL_DEFAULTS["synthesizer_provider"]}
+FACT_CHECKER_MODEL={MODEL_DEFAULTS["synthesizer_model"]}
 FACT_CHECKER_TEMPERATURE=0.1
 
 # Stage 4: Critic (Grounded Synthesis)
-PROVIDER_CRITIC=deepseek
-CRITIC_MODEL=deepseek-reasoner
+PROVIDER_CRITIC={MODEL_DEFAULTS["synthesizer_provider"]}
+CRITIC_MODEL={MODEL_DEFAULTS["synthesizer_model"]}
 CRITIC_TEMPERATURE=0.2
 
 # General Parameters
