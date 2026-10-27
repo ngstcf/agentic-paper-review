@@ -302,6 +302,20 @@ Each paper is evaluated per criterion (8 criteria = 8 extraction calls) plus one
 
 Always test with 5-10 papers first to verify your criteria and estimate costs before committing to a full batch.
 
+## Citation
+
+If you use this software in your work, please cite it. GitHub's **Cite this repository** button (in the sidebar) gives the reference in APA and BibTeX, generated from [`CITATION.cff`](CITATION.cff). For background on the approach, see the [release announcement](https://c3.unu.edu/blog/agentic-paper-review-release) and [From Months to Days](https://c3.unu.edu/blog/from-months-to-days-ai-assisted-peer-review-with-human-oversight).
+
+```bibtex
+@misc{chong2026agentic,
+  author = {Chong, Ng},
+  title  = {Agentic Paper Review System},
+  year   = {2026},
+  note   = {Version 2.1.0},
+  url    = {https://github.com/ngstcf/agentic-paper-review}
+}
+```
+
 ## License
 
 [MIT](LICENSE)

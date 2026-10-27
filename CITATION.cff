@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Agentic Paper Review System"
+abstract: "Domain-agnostic multi-agent AI tool for reviewing and scoring academic papers at scale, with custom criteria, multi-model comparison with an AI judge, literature grounding and human-in-the-loop design."
+authors:
+  - family-names: "Chong"
+    given-names: "Ng"
+    orcid: "https://orcid.org/0009-0003-5900-6749"
+    affiliation: "Campus Computing Centre, United Nations University"
+repository-code: "https://github.com/ngstcf/agentic-paper-review"
+url: "https://github.com/ngstcf/agentic-paper-review"
+license: MIT
+version: "2.1.0"
+date-released: "2026-10-28"
+keywords:
+  - peer review
+  - large language models
+  - multi-agent systems
+  - literature grounding
+references:
+  - type: blog
+    title: "Announcing the Open-Source Release of the Agentic Paper Review System"
+    authors:
+      - family-names: "Chong"
+        given-names: "Ng"
+    date-published: "2026-06-20"
+    url: "https://c3.unu.edu/blog/agentic-paper-review-release"
+  - type: blog
+    title: "From Months to Days: AI-Assisted Peer Review with Human Oversight"
+    authors:
+      - family-names: "Chong"
+        given-names: "Ng"
+    date-published: "2026-01-27"
+    url: "https://c3.unu.edu/blog/from-months-to-days-ai-assisted-peer-review-with-human-oversight"
