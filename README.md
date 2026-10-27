@@ -1,5 +1,7 @@
 # Agentic Paper Review System
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23716114.svg)](https://doi.org/10.5281/zenodo.23716114)
+
 A domain-agnostic, multi-agent LLM system for structured academic paper review. Ingests PDFs (and other formats), evaluates each paper against custom criteria, and produces scored reviews with optional cross-model adjudication and literature grounding. While designed for academic papers, the fully configurable criteria and prompts make it applicable to any document that needs structured evaluation — grant proposals, project reports, policy briefs, or technical documentation.
 
 **Human oversight is central to the design.** The AI produces structured reviews and scores — the final accept/reject decisions are always made by humans. Multi-model comparison and the AI Judge help reviewers focus where it matters by surfacing the papers where models disagree, rather than requiring manual review of every assessment.
@@ -304,7 +306,7 @@ Always test with 5-10 papers first to verify your criteria and estimate costs be
 
 ## Citation
 
-If you use this software in your work, please cite it. GitHub's **Cite this repository** button (in the sidebar) gives the reference in APA and BibTeX, generated from [`CITATION.cff`](CITATION.cff). For background on the approach, see the [release announcement](https://c3.unu.edu/blog/agentic-paper-review-release) and [From Months to Days](https://c3.unu.edu/blog/from-months-to-days-ai-assisted-peer-review-with-human-oversight).
+If you use this software in your work, please cite it. GitHub's **Cite this repository** button (in the sidebar) gives the reference in APA and BibTeX, generated from [`CITATION.cff`](CITATION.cff). Every release is archived on [Zenodo](https://doi.org/10.5281/zenodo.23716114): the DOI below covers all versions, and each release also has its own version-specific DOI. For background on the approach, see the [release announcement](https://c3.unu.edu/blog/agentic-paper-review-release) and [From Months to Days](https://c3.unu.edu/blog/from-months-to-days-ai-assisted-peer-review-with-human-oversight).
 
 ```bibtex
 @misc{chong2026agentic,
@@ -312,6 +314,7 @@ If you use this software in your work, please cite it. GitHub's **Cite this repo
   title  = {Agentic Paper Review System},
   year   = {2026},
   note   = {Version 2.1.0},
+  doi    = {10.5281/zenodo.23716114},
   url    = {https://github.com/ngstcf/agentic-paper-review}
 }
 ```
