@@ -319,3 +319,5 @@ If you use this software in your work, please cite it. GitHub's **Cite this repo
 ## License
 
 [MIT](LICENSE)
+
+Versions up to commit `c117aba` parsed PDFs with PyMuPDF4LLM, whose dependencies are licensed AGPL-3.0 (or commercially by Artifex) and, in some releases, PolyForm Noncommercial. If you run one of those versions, the licenses of those dependencies apply to you. Current versions parse PDFs with Docling (MIT) and have no AGPL or noncommercial dependencies.
