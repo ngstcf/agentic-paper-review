@@ -1,16 +1,24 @@
 # core/paper_ingestor.py (enhanced version)
 import os
+import re
 import json
-from markitdown import MarkItDown
+import threading
 from core.data_models import Paper, PaperMetadata
 from litellm import token_counter
 import logging
-from typing import List, Optional, Dict, Tuple
+from typing import Any, List, Optional, Dict, Tuple
 import hashlib
 import time
 from datetime import datetime
 
-import pymupdf4llm
+# Extracted text shorter than this (placeholders excluded) counts as a failed parse.
+MIN_TEXT_CHARS = 100
+
+# Docling takes several seconds to load its models, so converters are built once per process
+# and shared. Conversions are serialized: web_app.py runs pipelines in background threads
+# and Docling's thread-safety has not been verified.
+_converters: Dict[bool, Any] = {}
+_convert_lock = threading.Lock()
 
 def estimate_tokens(text: str) -> int:
     """Estimate token count using litellm's counter."""
@@ -116,9 +124,40 @@ def print_ingestion_progress(current, total, filename="", stage=""):
         if current == total:
             print()  # New line when complete
 
+def _get_converter(ocr: bool) -> Any:
+    """Return the shared Docling converter for the given OCR setting, creating it on first use."""
+    if ocr not in _converters:
+        # Imported here because Docling pulls in torch, which scripts that only read the cache don't need
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+
+        pdf_options = PdfPipelineOptions()
+        pdf_options.do_ocr = ocr
+        _converters[ocr] = DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_options)}
+        )
+    return _converters[ocr]
+
+def _text_length(markdown: str) -> int:
+    """Length of the extracted text, ignoring Docling's <!-- image --> style placeholders."""
+    return len(re.sub(r'<!--.*?-->', '', markdown).strip())
+
+def convert_to_markdown(file_path: str) -> str:
+    """
+    Convert a file to Markdown with Docling.
+    OCR is off on the first pass because it roughly doubles parse time on PDFs that already
+    have a text layer; a PDF that yields almost no text is retried once with OCR (scans).
+    """
+    with _convert_lock:
+        markdown = _get_converter(ocr=False).convert(file_path).document.export_to_markdown()
+        if _text_length(markdown) < MIN_TEXT_CHARS and file_path.lower().endswith('.pdf'):
+            markdown = _get_converter(ocr=True).convert(file_path).document.export_to_markdown()
+    return markdown
+
 def ingest_paper(file_path: str, show_progress=True) -> Optional[Paper]:
     """
-    Convert a single paper to normalized Markdown using MarkItDown.
+    Convert a single paper to normalized Markdown using Docling.
     (This is the slow part we want to avoid)
     """
     filename = os.path.basename(file_path)
@@ -133,9 +172,9 @@ def ingest_paper(file_path: str, show_progress=True) -> Optional[Paper]:
         file_size = os.path.getsize(file_path)
         file_size_mb = file_size / (1024 * 1024)
         
-        result = pymupdf4llm.to_markdown(file_path)
-        
-        if not result or len(result) < 100:
+        result = convert_to_markdown(file_path)
+
+        if _text_length(result) < MIN_TEXT_CHARS:
             logging.warning(f"Failed to extract sufficient text from {filename}")
             if show_progress:
                 print(f"[Ingestor] ⚠️  Warning: Insufficient text extracted from {filename}")

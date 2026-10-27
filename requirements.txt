@@ -9,7 +9,8 @@ tenacity
 requests>=2.31.0
 aiohttp>=3.9.0
 markitdown
-pymupdf4llm
+docling>=2.143
+transformers>=5.16  # earlier releases crash Docling's layout model on Apple Silicon (float64 on MPS)
 arxiv
 
 # Web Dashboard

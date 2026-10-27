@@ -47,6 +47,8 @@ Enable with `--literature-grounding` to add a 4-stage literature analysis:
 pip install -r requirements.txt
 ```
 
+PDFs are parsed with [Docling](https://github.com/docling-project/docling) (MIT). The first parse downloads its layout and table models from Hugging Face (about 1 GB, once), and parsing uses roughly 2 GB of RAM.
+
 ### Configure API Keys
 
 Create a `.env` file at the project root (see `.env_example` for all options):
