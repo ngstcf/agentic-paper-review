@@ -12,8 +12,8 @@ repository-code: "https://github.com/ngstcf/agentic-paper-review"
 url: "https://github.com/ngstcf/agentic-paper-review"
 doi: "10.5281/zenodo.23716114"
 license: MIT
-version: "2.1.0"
-date-released: "2026-10-28"
+version: "2.1.1"
+date-released: "2026-10-29"
 keywords:
   - peer review
   - large language models

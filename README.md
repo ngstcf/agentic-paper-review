@@ -313,7 +313,7 @@ If you use this software in your work, please cite it. GitHub's **Cite this repo
   author = {Chong, Ng},
   title  = {Agentic Paper Review System},
   year   = {2026},
-  note   = {Version 2.1.0},
+  note   = {Version 2.1.1},
   doi    = {10.5281/zenodo.23716114},
   url    = {https://github.com/ngstcf/agentic-paper-review}
 }
